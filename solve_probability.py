@@ -110,7 +110,7 @@ for i, t in enumerate(sol["t"]):
 
 plt.figure(3)
 plt.plot(sol["t"], fourier_coeff, label=[rf"$p_{{{i//2}}}$" for i in n_arr])
-plt.legend()
+plt.legend(loc="lower right", ncol=3)
 plt.tight_layout()
 
 # t_arr = np.linspace(0, 3, 3)
