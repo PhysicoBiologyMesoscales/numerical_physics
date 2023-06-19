@@ -9,7 +9,7 @@ from typing import Union
 
 plt.ion()
 
-R = 0.001  # Ratio between rotationnal diffusion and alignment strength
+R = 0.1  # Ratio between rotationnal diffusion and alignment strength
 N_points = 500
 d_theta = 2 * np.pi / N_points
 theta = np.linspace(-np.pi, np.pi, N_points)
@@ -70,7 +70,7 @@ def gaussian(x, mu, sigma):
 
 
 def mean_squared_diff(t, y):
-    tol = 1e-4
+    tol = 2e-5
     return np.mean((y - p_stat) ** 2) > tol
 
 
@@ -94,13 +94,24 @@ plt.figure(1)
 plt.scatter(n_arr, compute_fourier_coefficient(p_0, n_arr))
 plt.scatter(n_arr, compute_fourier_coefficient(p, n_arr))
 
-visualize_step = 1
-plt.figure(2)
-for t, y in zip(sol["t"][::visualize_step], sol["y"].T[::visualize_step]):
-    plt.clf()
-    plt.polar(theta, y)
-    plt.title(f"t={t}")
-    plt.pause(0.03)
+# visualize_step = 1
+# plt.figure(2)
+# for t, y in zip(sol["t"][::visualize_step], sol["y"].T[::visualize_step]):
+#     plt.clf()
+#     plt.polar(theta, y)
+#     plt.title(f"t={t}")
+#     plt.pause(0.03)
+
+n_arr = np.arange(0, 21, 2)
+fourier_coeff = np.zeros((len(sol["t"]), len(n_arr)))
+
+for i, t in enumerate(sol["t"]):
+    fourier_coeff[i, :] = compute_fourier_coefficient(sol["y"][:, i], n_arr)
+
+plt.figure(3)
+plt.plot(sol["t"], fourier_coeff, label=[rf"$p_{{{i//2}}}$" for i in n_arr])
+plt.legend()
+plt.tight_layout()
 
 # t_arr = np.linspace(0, 3, 3)
 # for t in t_arr:
