@@ -51,8 +51,6 @@ def sol_interpolated(sol: dict, t: float):
 
 
 def compute_fourier_coefficient(p: np.ndarray, n: Union[int, npt.NDArray[np.int_]]):
-    if p.shape != theta.shape:
-        raise (ValueError("p and theta must have the same dimensions"))
     if isinstance(n, int):
         order_0_correction = 1 - (n == 0) * 0.5
     else:
@@ -60,8 +58,12 @@ def compute_fourier_coefficient(p: np.ndarray, n: Union[int, npt.NDArray[np.int_
     return (
         2
         / np.pi
-        * np.sum(p * np.cos(np.outer(n, theta)) * d_theta, axis=1)
-        * order_0_correction
+        * np.einsum(
+            "j...,ij,i->...i",
+            p,
+            np.cos(np.outer(n, theta)) * d_theta,
+            order_0_correction,
+        )
     )
 
 
@@ -76,7 +78,7 @@ def mean_squared_diff(t, y):
 
 mean_squared_diff.terminal = True
 
-theta_0 = np.pi / 3
+theta_0 = 0
 p_0 = gaussian(theta, theta_0, 0.1) + gaussian(np.pi - theta, theta_0, 0.1)
 p_0 /= p_0.sum() * d_theta
 
@@ -103,15 +105,13 @@ plt.scatter(n_arr, compute_fourier_coefficient(p, n_arr))
 #     plt.pause(0.03)
 
 n_arr = np.arange(0, 21, 2)
-fourier_coeff = np.zeros((len(sol["t"]), len(n_arr)))
-
-for i, t in enumerate(sol["t"]):
-    fourier_coeff[i, :] = compute_fourier_coefficient(sol["y"][:, i], n_arr)
+fourier_coeff = compute_fourier_coefficient(sol["y"], n_arr)
 
 plt.figure(3)
 plt.plot(sol["t"], fourier_coeff, label=[rf"$p_{{{i//2}}}$" for i in n_arr])
 plt.legend(loc="lower right", ncol=3)
 plt.tight_layout()
+
 
 # t_arr = np.linspace(0, 3, 3)
 # for t in t_arr:
