@@ -36,7 +36,8 @@ def compute_first_fourier_coefficients(p: np.ndarray):
 
 
 def p_stat(theta, alpha):
-    return 1 / 2 / np.pi / iv(0, alpha) * np.exp(np.cos(2 * theta) * alpha)
+    p = 1 / 2 / np.pi / iv(0, alpha) * np.exp(np.cos(2 * theta) * alpha)
+    return p / p.sum() / d_theta
 
 
 # def diracs(x):
@@ -46,9 +47,9 @@ def p_stat(theta, alpha):
 t0 = 0.0
 tf = 10.0
 
-alpha = 0
+alpha = 10
 
-N_t = 100
+N_t = 200
 t_eval = np.linspace(t0, tf, N_t)
 
 initial_conditions = np.diag(np.ones(len(theta))) / d_theta
@@ -72,3 +73,8 @@ corr = (
         axis=0,
     )
 )
+
+plt.plot(t_eval, corr)
+# plt.plot(t_eval, np.exp(-t_eval))
+plt.plot(t_eval, 1 - 2 * np.exp(-alpha) * t_eval)
+# plt.semilogy()
