@@ -34,7 +34,7 @@ r = np.random.uniform([0, 0], [l, L], size=(N, 2))
 theta = 2 * np.pi * np.random.random(size=N)
 
 # Physical parameters
-f_0 = 2
+f_0 = 0
 k = 5
 kc = 4 / R
 D = 0.0005
@@ -152,8 +152,40 @@ def compute_radial_correlation(r):
     return g, r_arr
 
 
+def compute_pair_correlation(r):
+    r_max = 0.4
+    N_x, N_y = 150, 150  # number of steps between 0 and r_max
+    bins_x = np.linspace(-r_max, r_max, N_x + 1)
+    bins_y = np.linspace(-r_max, r_max, N_y + 1)
+    g = np.zeros((N_x, N_y))
+    N_choice = 500
+    for ref_idx in np.random.randint(0, r.shape[0], size=N_choice):
+        r_diff = np.delete(r - r[ref_idx, :], ref_idx, 0)
+        # Apply periodic BC
+        r_diff = np.where(
+            abs(r_diff) > [l / 2, np.infty],
+            -np.sign(r_diff) * (l - abs(r_diff)),
+            r_diff,
+        )
+        r_diff = np.where(
+            abs(r_diff) > [np.infty, L / 2],
+            -np.sign(r_diff) * (L - abs(r_diff)),
+            r_diff,
+        )
+        count, bins = np.histogram2d(r_diff[:, 0], r_diff[:, 1], bins=[bins_x, bins_y])
+        g += count
+    g = g / N_choice
+    return g
+
+
 g, r_arr = compute_radial_correlation(r)
 plt.figure()
 plt.plot(r_arr, g)
+plt.show()
+plt.pause(2)
+
+g = compute_pair_correlation(r)
+plt.figure()
+plt.pcolormesh(g)
 plt.show()
 plt.pause(2)
