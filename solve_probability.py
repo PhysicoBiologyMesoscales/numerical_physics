@@ -9,7 +9,7 @@ from typing import Union
 
 plt.ion()
 
-N_points = 500
+N_points = 200
 d_theta = 2 * np.pi / N_points
 theta = np.linspace(-np.pi, np.pi, N_points)
 sintheta_minus = np.roll(np.sin(2 * theta), 1)
@@ -55,7 +55,7 @@ def compute_fourier_coefficient(p: np.ndarray, n: Union[int, npt.NDArray[np.int_
     else:
         order_0_correction = np.ones(n.shape) - (n == 0) * 0.5
     return (
-        2
+        1
         / np.pi
         * np.einsum(
             "j...,ij,i->...i",
@@ -67,7 +67,12 @@ def compute_fourier_coefficient(p: np.ndarray, n: Union[int, npt.NDArray[np.int_
 
 
 def gaussian(x, mu, sigma):
-    return 1 / np.sqrt(2 * np.pi) / sigma * np.exp(-(((x % (np.pi) - mu) / sigma) ** 2))
+    return (
+        1
+        / np.sqrt(2 * np.pi)
+        / sigma
+        * np.exp(-(((x % (2 * np.pi) - mu) / sigma) ** 2))
+    )
 
 
 def mean_squared_diff(t, y, R, y_t):
@@ -77,8 +82,8 @@ def mean_squared_diff(t, y, R, y_t):
 
 mean_squared_diff.terminal = True
 
-theta_0 = 0
-p_0 = gaussian(theta, theta_0, 0.1) + gaussian(np.pi - theta, theta_0, 0.1)
+theta_0 = np.pi / 3
+p_0 = gaussian(theta, theta_0, 0.1)
 p_0 /= p_0.sum() * d_theta
 
 R_list = [2.0, 0.1, 0.0008]
@@ -90,7 +95,7 @@ for i, R in enumerate(R_list):
     print(f"R={R}")
     p_stat = np.exp(np.cos(2 * theta) / 2 / R) / (2 * np.pi * iv(0, 1 / 2 / R))
     sol = solve_ivp(
-        RHS, t_span=(0, 10), y0=p_0, events=mean_squared_diff, args=(R, p_stat)
+        RHS, t_span=(0, 100), y0=p_0, events=mean_squared_diff, args=(R, p_stat)
     )
 
     ax1 = axes[i, 0]
@@ -100,33 +105,33 @@ for i, R in enumerate(R_list):
 
     ax2 = axes[i, 1]
 
-    n_arr = np.arange(-20, 21, 2)
+    n_arr = np.arange(-10, 11)
     ax2.scatter(n_arr, compute_fourier_coefficient(p_0, n_arr), label="t=0")
     ax2.scatter(
         n_arr,
         compute_fourier_coefficient(sol["y"][:, -1], n_arr),
         label=f"t={sol['t'][-1]:.3}",
     )
-    ax2.set_xticks(ticks=n_arr, labels=n_arr // 2)
+    ax2.set_xticks(ticks=n_arr, labels=n_arr)
     ax2.legend()
 
     ax3 = axes[i, 2]
-    n_arr = np.arange(0, 11, 2)
+    n_arr = np.arange(0, 7, 1)
     fourier_coeff = compute_fourier_coefficient(sol["y"], n_arr)
     plot_until_time = 2
     last_index = find_bounds_idx(plot_until_time, sol["t"])[1]
     lines = ax3.plot(
         sol["t"][1:last_index],
-        fourier_coeff[1:last_index, 1:],
-        label=[rf"$p_{{{i//2}}}$" for i in n_arr[1:]],
+        fourier_coeff[1:last_index, :],
+        label=[rf"$p_{{{i}}}$" for i in n_arr[:]],
     )
     [
         ax3.axhline(
-            2 / np.pi * iv(n // 2, 1 / 2 / R) / iv(0, 1 / 2 / R),
+            1 / np.pi * iv(n / 2, 1 / 2 / R) / iv(0, 1 / 2 / R),
             linestyle="-.",
             color=lines[i].get_color(),
         )
-        for (i, n) in enumerate(n_arr[1:])
+        for (i, n) in enumerate(n_arr[:])
     ]
     ax3.legend(ncol=3, prop={"size": 10})
 
