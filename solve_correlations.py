@@ -13,7 +13,7 @@ plt.ion()
 
 N_points = 50
 d_theta = 2 * np.pi / N_points
-theta = np.linspace(d_theta / 2, 2 * np.pi - d_theta / 2, N_points)
+theta = np.linspace(-np.pi, np.pi, N_points)
 sintheta_minus = np.roll(np.sin(2 * theta), 1)
 sintheta_plus = np.roll(np.sin(2 * theta), -1)
 
@@ -36,19 +36,8 @@ def compute_first_fourier_coefficients(p: np.ndarray):
 
 
 def p_stat(theta, alpha):
-    return 1 / 2 / np.pi / iv(0, alpha / 2) * np.exp(np.cos(2 * theta) * alpha / 2)
-
-
-def fourier_th(theta0, alpha, t):
-    return (
-        np.exp(-t)
-        * (
-            np.cos(theta0)
-            * (1 + alpha * t)
-            # - alpha * np.cos(3 * theta0) * (1 - np.exp(-8 * np.pi * t)) / 8
-        )
-        / np.pi
-    )
+    p = 1 / 2 / np.pi / iv(0, alpha) * np.exp(np.cos(2 * theta) * alpha)
+    return p / p.sum() / d_theta
 
 
 # def diracs(x):
@@ -56,9 +45,9 @@ def fourier_th(theta0, alpha, t):
 #     return p
 
 t0 = 0.0
-tf = 5
+tf = 2.0
 
-alpha = 0.5
+alpha = 0.4
 
 N_t = 200
 t_eval = np.linspace(t0, tf, N_t)
@@ -85,13 +74,6 @@ corr = (
     )
 )
 
-# plt.figure()
-# for i, t in enumerate(t_eval):
-#     plt.clf()
-#     plt.polar(theta, sols[0, :, i])
-#     plt.polar(theta, sols[25, :, i])
-#     plt.pause(0.05)
-
 plt.plot(t_eval, corr)
 plt.plot(t_eval, np.exp(-t_eval))
 plt.plot(
@@ -103,30 +85,8 @@ plt.plot(
         * (t_eval - (1 - np.exp(-8 * t_eval)) / 8)
         * iv(1, alpha / 2)
         / iv(0, alpha / 2)
+        + alpha**2
+        * (3 * (1 - np.exp(-8 * t_eval)) / 64 - 3 * t_eval / 8 + t_eval**2 / 2)
     ),
 )
-# plt.plot(t_eval, np.exp(-t_eval)*(np.cosh(alpha*t_eval)+np.sinh(alpha*t_eval)*iv(1, alpha/2)/iv(0, alpha/2)))
-plt.plot(
-    t_eval,
-    np.exp(-t_eval)
-    * (
-        1
-        + alpha
-        * (t_eval - (1 - np.exp(-8 * t_eval)) / 8)
-        * iv(1, alpha / 2)
-        / iv(0, alpha / 2)
-        + alpha**2 * ((1 - np.exp(-8 * t_eval)) / 64 - t_eval / 8 + t_eval**2 / 2)
-    ),
-)
-# plt.figure()
-# plt.plot(t_eval, a1[25,:])
-# plt.plot(t_eval, fourier_th(theta[25], 0, t_eval))
-# plt.plot(t_eval, fourier_th(theta[25], alpha, t_eval))
-
-# plt.figure()
-# plt.plot(t_eval, a1[12,:])
-# plt.plot(t_eval, fourier_th(theta[12], 0, t_eval))
-# plt.plot(t_eval, fourier_th(theta[12], alpha, t_eval))
-
-# plt.plot(t_eval, 1 - 2 * np.exp(-alpha) * t_eval)
 # plt.semilogy()
