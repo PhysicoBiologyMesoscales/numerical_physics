@@ -124,9 +124,9 @@ class Lattice2D:
         )
         self.pos = np.array(np.unravel_index(pos1d, (self.size_y, self.size_x)))
         self.dir = np.random.choice([-1, 1], size=self.N)
-        # nan means there's no particle on the site, +/-1 means there is a particle going to the right/left
         lattice = np.zeros((self.size_y, self.size_x), dtype=int)
         lattice[*self.pos] = self.dir
+        # masked value means there's no particle on the site, +/-1 means there is a particle going to the right/left
         self.lattice = np.ma.array(lattice, mask=1 - abs(lattice))
 
         self.iter = 0

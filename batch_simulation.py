@@ -216,15 +216,15 @@ class SingleFile(Simulation):
 
 
 if __name__ == "__main__":
-    sim = SingleFile(
-        N=50,
+    sim = Simulation(
+        N=5000,
         f_0=2,
         h=np.infty,
         k=5,
         plot_sim=True,
         write_sim=False,
-        l=1.0,
-        L=0.2,
+        l=2.0,
+        L=4.0,
         plot_modulo=20,
         N_t=20000,
         D=0,
