@@ -104,6 +104,14 @@ class Simulation:
         self.r = np.random.uniform([0, 0], [self.l, self.L], size=(self.N, 2))
         self.theta = 2 * np.pi * np.random.random(size=self.N)
 
+    def initiate_fields(self):
+        """
+        Initiate fields r and theta to random values
+        """
+
+        self.r = np.random.uniform([0, 0], [self.l, self.L], size=(self.N, 2))
+        self.theta = np.random.choice([0, np.pi], size=self.N)
+
     def compute_forces(self):
         Cij = (self.r // np.array([self.wx, self.wy])).astype(int)
         # 1D array encoding the index of the cell containing the particle
@@ -216,15 +224,15 @@ class SingleFile(Simulation):
 
 
 if __name__ == "__main__":
-    sim = Simulation(
-        N=5000,
+    sim = SingleFile(
+        N=3,
         f_0=2,
         h=np.infty,
-        k=5,
+        k=4,
         plot_sim=True,
         write_sim=False,
-        l=2.0,
-        L=4.0,
+        l=1.0,
+        L=0.2,
         plot_modulo=20,
         N_t=20000,
         D=0,

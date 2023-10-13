@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from skimage.measure import regionprops_table, label
 
 
 class Metropolis:
@@ -8,6 +9,8 @@ class Metropolis:
         self.Lx = Lx
         self.Ly = Ly
         self.beta = 100
+        self.line_increment = np.repeat([np.arange(self.Ly)*self.Lx], self.Lx, axis=0).T
+        
 
     def update(self):
         N_moves = self.Lx**2
@@ -26,6 +29,9 @@ class Metropolis:
             gamma = np.random.uniform(0, 1)
             if np.log(gamma) < -self.beta * delta:
                 self.lattice[i, j] *= -1
+    
+    def segment_domains(self):
+        pass
 
 
 if __name__ == "__main__":
