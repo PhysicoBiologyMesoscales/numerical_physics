@@ -7,7 +7,7 @@ plt.ion()
 
 
 # Packing fraction and particle number
-phi = 0.1
+phi = 0.6
 N = 5000
 # Frame aspect ratio
 aspectRatio = 1.0
@@ -15,19 +15,21 @@ aspectRatio = 1.0
 l = np.sqrt(N * np.pi / aspectRatio / phi)
 L = aspectRatio * l
 # Physical parameters
-F0 = 1  # Propulsion force
-Kc = 2.5  # Collision force
-K = 0  # Polarity-velocity coupling
+F0 = 10  # Propulsion force
+Kc = 5  # Collision force
+K = 10  # Polarity-velocity coupling
 h = np.infty
 gamma = np.array([[1, 0], [0, 1 / h]])
 
-Nt = 10000
+Nt = 100000
 dt = 5e-2 / F0
 
 # Display parameters
-displayWidth = 10.0
+displayWidth = 7.0
 fig = plt.figure(figsize=(displayWidth, displayWidth * aspectRatio))
 ax = fig.add_axes((0, 0, 1, 1))
+fig2 = plt.figure()
+ax2 = fig2.add_axes((0.1, 0.1, 0.9, 0.9))
 
 # Cells lists number
 Nx = int(l / 2)
@@ -90,11 +92,15 @@ def compute_forces(r):
 
 # Initiate fields
 r = np.random.uniform([0, 0], [l, L], size=(N, 2))
-theta = np.random.uniform(0, 2 * np.pi, size=N)
+theta = np.random.uniform(-np.pi + 1e-2, np.pi - 1e-2, size=N)
+
+avg_cos = []
+avg_cos3 = []
 
 for i in range(Nt):
     # Compute forces
-    Fx, Fy = compute_forces(r)
+    # Fx, Fy = compute_forces(r)
+    Fx, Fy = 0, 0
     v = (
         F0
         * np.stack(
@@ -109,19 +115,29 @@ for i in range(Nt):
     r += dt * v
     r %= np.array([l, L])
 
-    if i % 50 == 0:
-        ax.cla()
-        ax.set_xlim(0, l)
-        ax.set_ylim(0, L)
-        ax.scatter(
-            r[:, 0],
-            r[:, 1],
-            s=np.pi * 1.25 * (72.0 / l * displayWidth) ** 2,
-            c=v[:, 0] / F0,
-            vmin=-1,
-            vmax=1,
-            cmap=cm.bwr,
-        )
+    if i % int(10 * F0) == 1:
+        avg_cos.append((K * F0 - 1) * np.cos(theta).mean())
+        avg_cos3.append((K * F0) * np.cos(3 * theta).mean())
+        # ax.cla()
+        # ax.set_xlim(0, l)
+        # ax.set_ylim(0, L)
+        # ax.scatter(
+        #     r[:, 0],
+        #     r[:, 1],
+        #     s=np.pi * 1.25 * (72.0 / l * displayWidth) ** 2,
+        #     c=np.cos(theta),
+        #     vmin=-1,
+        #     vmax=1,
+        #     cmap=cm.bwr,
+        # )
         fig.show()
-        fig.show()
+        N_p = np.count_nonzero(np.cos(theta) > 0)
+        ax2.cla()
+        ax2.plot()
+        ax2.plot(avg_cos)
+        ax2.plot(avg_cos3)
+        ax2.axhline(np.array(avg_cos).mean())
+        ax2.axhline(np.array(avg_cos3).mean())
+        # ax2.semilogy()
+        fig2.show()
         plt.pause(0.1)

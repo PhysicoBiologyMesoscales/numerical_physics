@@ -243,7 +243,7 @@ class Lattice2D:
 
 
 if __name__ == "__main__":
-    lat = Lattice2D(100, 200, 20000, 1000, alpha=0.2)
+    lat = Lattice2D(100, 200, 20000, 1000, alpha=0.02)
     cmap = cm.jet
     cmap.set_bad("black", 1.0)
     plt.figure()
