@@ -25,6 +25,7 @@ F0 = 1  # Propulsion force
 Kc = 5  # Collision force
 K = 5  # Polarity-velocity coupling
 h = 5
+h_2 = 0
 
 Nt = 2000
 dt = 5e-2 / F0
@@ -110,7 +111,7 @@ theta = np.random.uniform(-np.pi + 1e-2, np.pi - 1e-2, size=N)
 avg_cos = []
 avg_cos3 = []
 
-save_path = join("..", "Data", "Symmetric", f"phi={phi}_F0={F0}_Kc={Kc}_K={K}_h={h}")
+save_path = join("..", "Data", "Asymmetrical", f"phi={phi}_F0={F0}_Kc={Kc}_K={K}_h={h}")
 try:
     makedirs(join(save_path, "Images"))
 except FileExistsError:
@@ -136,7 +137,15 @@ for i in range(Nt):
     )
     xi = np.sqrt(2 * dt) * np.random.randn(N)
     e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
-    theta += dt * (-h * np.sin(2 * theta) + K * np.einsum("ij, ij->i", v, e_perp)) + xi
+    theta += (
+        dt
+        * (
+            -h_2 * np.cos(theta)
+            - h * np.sin(2 * theta)
+            + K * np.einsum("ij, ij->i", v, e_perp)
+        )
+        + xi
+    )
     theta %= 2 * np.pi
     r += dt * v
     r %= np.array([l, L])
