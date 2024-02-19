@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument("kc", help="Interaction force intensity", type=float)
     parser.add_argument("k", help="Polarity-Velocity alignment strength", type=float)
     parser.add_argument("h", help="Nematic field intensity", type=float)
+    parser.add_argument("h2", help="Polar field intensity", type=float)
     parser.add_argument("t_max", help="Max simulation time", type=float)
     parser.add_argument(
         "--plot_images",
@@ -37,6 +38,8 @@ def parse_args():
     )
     parser.add_argument("--save_path", help="Path to save images", type=str)
     args = parser.parse_args()
+    if args.save_images and not args.save_path:
+        raise (ValueError("Please specify a file path to save the images"))
     return args
 
 
@@ -59,6 +62,7 @@ def main():
     kc = parms.kc  # Collision force
     k = parms.k  # Polarity-velocity coupling
     h = parms.h  # Nematic field intensity
+    h2 = parms.h2  # Polar field intensity
 
     dt = 5e-2 / v0
     t_max = parms.t_max
@@ -66,10 +70,11 @@ def main():
 
     # Display parameters
     displayHeight = 7.0
-    fig = plt.figure(figsize=(displayHeight / aspectRatio * 2, displayHeight))
-    ax_ = fig.add_axes((0, 0, 1 / 2, 1))
-    ax_theta = fig.add_axes((1 / 2, 0, 1 / 2, 1))
-    for ax in [ax_, ax_theta]:
+    fig = plt.figure(figsize=(displayHeight / aspectRatio * 3, displayHeight))
+    ax_ = fig.add_axes((0, 0, 1 / 3, 1))
+    ax_x = fig.add_axes((1 / 3, 0, 1 / 3, 1))
+    ax_y = fig.add_axes((2 / 3, 0, 1 / 3, 1))
+    for ax in [ax_, ax_x, ax_y]:
         # Hide X and Y axes label marks
         ax.xaxis.set_tick_params(labelbottom=False)
         ax.yaxis.set_tick_params(labelleft=False)
@@ -176,12 +181,18 @@ def main():
             ],
             axis=-1,
         )
-        F = v0 * np.stack([kc * Fx, kc * Fy], axis=-1)
+        F = v0 * kc * np.stack([Fx, Fy], axis=-1)
         v += F
         xi = np.sqrt(2 * dt) * np.random.randn(N)
         e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
         theta += (
-            dt * (-h * np.sin(2 * theta) + k * np.einsum("ij, ij->i", F, e_perp)) + xi
+            dt
+            * (
+                -h2 * np.cos(theta)
+                - h * np.sin(2 * theta)
+                + k * np.einsum("ij, ij->i", F, e_perp)
+            )
+            + xi
         )
         theta %= 2 * np.pi
         r += dt * v
@@ -199,20 +210,31 @@ def main():
                 vmin=0,
                 vmax=N,
             )
-            ax_theta.cla()
-            ax_theta.set_xlim(0, l)
-            ax_theta.set_ylim(0, L)
-            ax_theta.scatter(
+            ax_x.cla()
+            ax_x.set_xlim(0, l)
+            ax_x.set_ylim(0, L)
+            ax_x.scatter(
                 r[:, 0],
                 r[:, 1],
                 s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
-                c=theta,
-                vmin=0,
-                vmax=2 * np.pi,
-                cmap=cm.hsv,
+                c=v[:, 0],
+                vmin=-v0,
+                vmax=v0,
+                cmap=cm.bwr,
+            )
+            ax_y.cla()
+            ax_y.set_xlim(0, l)
+            ax_y.set_ylim(0, L)
+            ax_y.scatter(
+                r[:, 0],
+                r[:, 1],
+                s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
+                c=v[:, 1],
+                vmin=-v0,
+                vmax=v0,
+                cmap=cm.bwr,
             )
             if parms.plot_images:
-                print("plotting image !")
                 fig.show()
                 plt.pause(0.1)
             if parms.save_images:

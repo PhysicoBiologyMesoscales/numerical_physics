@@ -8,25 +8,36 @@ import tkinter as tk
 from tkinter import messagebox
 from shutil import rmtree
 import pandas as pd
+import sys
 
 plt.ion()
+
+# Flag to control pausing and resuming
+pause = False
+
+
+def toggle_pause(event):
+    global pause
+    if event.key == " ":
+        pause = not pause
+
 
 save_images = False
 
 # Packing fraction and particle number
-phi = 0.2
-N = int(40000 * phi)
+phi = 1
+N = int(5000 * phi)
 # Frame aspect ratio
 aspectRatio = 4.0
 # Frame width
 l = np.sqrt(N * np.pi / aspectRatio / phi)
 L = aspectRatio * l
 # Physical parameters
-F0 = 1.2  # Propulsion force
-Kc = 5  # Collision force
-K = 7  # Polarity-velocity coupling
+F0 = 1.6  # Propulsion force
+Kc = 3  # Collision force
+K = 5  # Polarity-velocity coupling
 h = 5  # Nematic field intensity
-h2 = 3
+mu = 0  # Friction anisotropy
 epsilon = 0  # Friction asymmetry
 
 Nt = 10000
@@ -34,11 +45,11 @@ dt = 5e-2 / F0
 
 # Display parameters
 displayHeight = 7.0
-fig = plt.figure(figsize=(displayHeight / aspectRatio * 3, displayHeight))
-ax_ = fig.add_axes((0, 0, 1 / 3, 1))
-ax_x = fig.add_axes((1 / 3, 0, 1 / 3, 1))
-ax_y = fig.add_axes((2 / 3, 0, 1 / 3, 1))
-for ax in [ax_x, ax_y, ax_]:
+fig = plt.figure(figsize=(displayHeight / aspectRatio * 2, displayHeight))
+fig.canvas.mpl_connect("key_press_event", toggle_pause)
+ax_ = fig.add_axes((0, 0, 1 / 2, 1))
+ax_theta = fig.add_axes((1 / 2, 0, 1 / 2, 1))
+for ax in [ax_, ax_theta]:
     # Hide X and Y axes label marks
     ax.xaxis.set_tick_params(labelbottom=False)
     ax.yaxis.set_tick_params(labelleft=False)
@@ -71,7 +82,7 @@ def build_neigbouring_matrix():
 neighbours = build_neigbouring_matrix()
 
 
-def compute_forces(r):
+def compute_forces_and_torques(r):
     Cij = (r // np.array([wx, wy])).astype(int)
     # 1D array encoding the index of the cell containing the particle
     C1d = Cij[:, 0] + Nx * Cij[:, 1]
@@ -85,11 +96,13 @@ def compute_forces(r):
 
     # Compute direction vectors and apply periodic boundary conditions
     xij = x_ - x_.T
-    x_bound = (xij.data > l / 2).astype(int)
-    xij.data += l * (x_bound.T - x_bound)
+    x_bound = (abs(xij.data) > l / 2).astype(int)
+    xij.data = np.where(x_bound, -np.sign(xij.data) * (L - abs(xij.data)), xij.data)
+    # xij.data += l * (x_bound.T - x_bound)
     yij = y_ - y_.T
-    y_bound = (yij.data > L / 2).astype(int)
-    yij.data += L * (y_bound.T - y_bound)
+    y_bound = (abs(yij.data) > L / 2).astype(int)
+    yij.data = np.where(y_bound, -np.sign(yij.data) * (L - abs(yij.data)), yij.data)
+    # yij.data += L * (y_bound.T - y_bound)
 
     # particle-particle distance for interacting particles
     dij = (xij.power(2) + yij.power(2)).power(0.5)
@@ -103,12 +116,16 @@ def compute_forces(r):
     # Fij = 12 * (-dij).power(-13) - 6 * (-dij).power(-7)  # wca
     Fx = np.array(Fij.multiply(xij).sum(axis=0)).flatten()
     Fy = np.array(Fij.multiply(yij).sum(axis=0)).flatten()
-    return Fx, Fy
+    idx_i, idx_j, _v = sp.find(dij)  # Get indices to compute torques
+    ind_torques = np.sin(2 * (theta[idx_i] - theta[idx_j]))
+    tij = sp.csr_matrix((ind_torques, (idx_i, idx_j)), shape=(N, N))
+    torque = np.array(tij.sum(axis=0)).flatten()
+    return Fx, Fy, torque
 
 
 # Initiate fields
 r = np.random.uniform([0, 0], [l, L], size=(N, 2))
-theta = np.random.uniform(-np.pi, np.pi, size=N)
+theta = np.random.uniform(0, 2 * np.pi, size=N)
 
 avg_cos = []
 avg_cos3 = []
@@ -135,17 +152,14 @@ if save_images:
         makedirs(join(save_path, "Images"))
 
 
+base_arr = np.random.permutation(np.arange(Nx * Ny))
+
+
 for i in range(Nt):
+    while pause:
+        plt.pause(0.1)
     # Compute forces
-    Fx, Fy = compute_forces(r)
-    # Fx, Fy = 0, 0
-    # v = F0 * np.stack(
-    #     [
-    #         np.cos(theta) + Kc * Fx,
-    #         np.sin(theta) + Kc * Fy / mu * (1 - epsilon * np.sin(theta)),
-    #     ],
-    #     axis=-1,
-    # )
+    Fx, Fy, torque = compute_forces_and_torques(r)
     v = F0 * np.stack(
         [
             np.cos(theta),
@@ -157,44 +171,12 @@ for i in range(Nt):
     v += F
     xi = np.sqrt(2 * dt) * np.random.randn(N)
     e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
-    theta += (
-        dt
-        * (
-            -h * np.sin(2 * theta)
-            - h2 * np.cos(2 * theta)
-            + K * np.einsum("ij, ij->i", F, e_perp)
-        )
-        + xi
-    )
+    theta += dt * (-h * np.sin(2 * theta) + K * torque) + xi
     theta %= 2 * np.pi
     r += dt * v
     r %= np.array([l, L])
 
-    if i % int(20 * F0) == 1:
-        ax_x.cla()
-        ax_x.set_xlim(0, l)
-        ax_x.set_ylim(0, L)
-        ax_x.scatter(
-            r[:, 0],
-            r[:, 1],
-            s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
-            c=v[:, 0],
-            vmin=-F0,
-            vmax=F0,
-            cmap=cm.bwr,
-        )
-        ax_y.cla()
-        ax_y.set_xlim(0, l)
-        ax_y.set_ylim(0, L)
-        ax_y.scatter(
-            r[:, 0],
-            r[:, 1],
-            s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
-            c=v[:, 1],
-            vmin=-F0,
-            vmax=F0,
-            cmap=cm.bwr,
-        )
+    if i % int(10 * F0) == 1:
         ax_.cla()
         ax_.set_xlim(0, l)
         ax_.set_ylim(0, L)
@@ -204,7 +186,19 @@ for i in range(Nt):
             s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
             c=np.arange(N),
             vmin=0,
-            vmax=N,
+            vmax=N - 1,
+        )
+        ax_theta.cla()
+        ax_theta.set_xlim(0, l)
+        ax_theta.set_ylim(0, L)
+        ax_theta.scatter(
+            r[:, 0],
+            r[:, 1],
+            s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
+            c=theta,
+            vmin=0,
+            vmax=2 * np.pi,
+            cmap=cm.hsv,
         )
         fig.show()
         if save_images:
@@ -212,8 +206,6 @@ for i in range(Nt):
             data = {
                 "t": dt * i * np.ones(N),
                 "theta": theta,
-                "vx": v[:, 0],
-                "vy": v[:, 1],
                 "x": r[:, 0],
                 "y": r[:, 1],
             }
@@ -223,4 +215,4 @@ for i in range(Nt):
             pd.DataFrame(data).to_csv(
                 join(save_path, "Data.csv"), mode="a", header=header
             )
-            plt.pause(0.1)
+        plt.pause(0.1)
