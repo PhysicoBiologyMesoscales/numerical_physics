@@ -14,19 +14,19 @@ plt.ion()
 save_images = False
 
 # Packing fraction and particle number
-phi = 0.2
-N = int(40000 * phi)
+phi = 1
+N = int(5000 * phi)
 # Frame aspect ratio
 aspectRatio = 4.0
 # Frame width
 l = np.sqrt(N * np.pi / aspectRatio / phi)
 L = aspectRatio * l
 # Physical parameters
-F0 = 1.2  # Propulsion force
-Kc = 5  # Collision force
-K = 7  # Polarity-velocity coupling
-h = 5  # Nematic field intensity
-h2 = 3
+F0 = 2  # Propulsion force
+Kc = 3  # Collision force
+K = 5  # Polarity-velocity coupling
+h = 0  # Nematic field intensity
+mu = 0  # Friction anisotropy
 epsilon = 0  # Friction asymmetry
 
 Nt = 10000
@@ -34,11 +34,10 @@ dt = 5e-2 / F0
 
 # Display parameters
 displayHeight = 7.0
-fig = plt.figure(figsize=(displayHeight / aspectRatio * 3, displayHeight))
-ax_ = fig.add_axes((0, 0, 1 / 3, 1))
-ax_x = fig.add_axes((1 / 3, 0, 1 / 3, 1))
-ax_y = fig.add_axes((2 / 3, 0, 1 / 3, 1))
-for ax in [ax_x, ax_y, ax_]:
+fig = plt.figure(figsize=(displayHeight / aspectRatio * 2, displayHeight))
+ax_ = fig.add_axes((0, 0, 1 / 2, 1))
+ax_theta = fig.add_axes((1 / 2, 0, 1 / 2, 1))
+for ax in [ax_, ax_theta]:
     # Hide X and Y axes label marks
     ax.xaxis.set_tick_params(labelbottom=False)
     ax.yaxis.set_tick_params(labelleft=False)
@@ -85,11 +84,13 @@ def compute_forces(r):
 
     # Compute direction vectors and apply periodic boundary conditions
     xij = x_ - x_.T
-    x_bound = (xij.data > l / 2).astype(int)
-    xij.data += l * (x_bound.T - x_bound)
+    x_bound = (abs(xij.data) > l / 2).astype(int)
+    xij.data = np.where(x_bound, -np.sign(xij.data) * (L - abs(xij.data)), xij.data)
+    # xij.data += l * (x_bound.T - x_bound)
     yij = y_ - y_.T
-    y_bound = (yij.data > L / 2).astype(int)
-    yij.data += L * (y_bound.T - y_bound)
+    y_bound = (abs(yij.data) > L / 2).astype(int)
+    yij.data = np.where(y_bound, -np.sign(yij.data) * (L - abs(yij.data)), yij.data)
+    # yij.data += L * (y_bound.T - y_bound)
 
     # particle-particle distance for interacting particles
     dij = (xij.power(2) + yij.power(2)).power(0.5)
@@ -138,14 +139,6 @@ if save_images:
 for i in range(Nt):
     # Compute forces
     Fx, Fy = compute_forces(r)
-    # Fx, Fy = 0, 0
-    # v = F0 * np.stack(
-    #     [
-    #         np.cos(theta) + Kc * Fx,
-    #         np.sin(theta) + Kc * Fy / mu * (1 - epsilon * np.sin(theta)),
-    #     ],
-    #     axis=-1,
-    # )
     v = F0 * np.stack(
         [
             np.cos(theta),
@@ -157,44 +150,12 @@ for i in range(Nt):
     v += F
     xi = np.sqrt(2 * dt) * np.random.randn(N)
     e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
-    theta += (
-        dt
-        * (
-            -h * np.sin(2 * theta)
-            - h2 * np.cos(2 * theta)
-            + K * np.einsum("ij, ij->i", F, e_perp)
-        )
-        + xi
-    )
+    theta += dt * (-h * np.sin(2 * theta) + K * np.einsum("ij, ij->i", F, e_perp)) + xi
     theta %= 2 * np.pi
     r += dt * v
     r %= np.array([l, L])
 
     if i % int(20 * F0) == 1:
-        ax_x.cla()
-        ax_x.set_xlim(0, l)
-        ax_x.set_ylim(0, L)
-        ax_x.scatter(
-            r[:, 0],
-            r[:, 1],
-            s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
-            c=v[:, 0],
-            vmin=-F0,
-            vmax=F0,
-            cmap=cm.bwr,
-        )
-        ax_y.cla()
-        ax_y.set_xlim(0, l)
-        ax_y.set_ylim(0, L)
-        ax_y.scatter(
-            r[:, 0],
-            r[:, 1],
-            s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
-            c=v[:, 1],
-            vmin=-F0,
-            vmax=F0,
-            cmap=cm.bwr,
-        )
         ax_.cla()
         ax_.set_xlim(0, l)
         ax_.set_ylim(0, L)
@@ -206,14 +167,24 @@ for i in range(Nt):
             vmin=0,
             vmax=N,
         )
+        ax_theta.cla()
+        ax_theta.set_xlim(0, l)
+        ax_theta.set_ylim(0, L)
+        ax_theta.scatter(
+            r[:, 0],
+            r[:, 1],
+            s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
+            c=theta,
+            vmin=0,
+            vmax=2 * np.pi,
+            cmap=cm.hsv,
+        )
         fig.show()
         if save_images:
             fig.savefig(join(save_path, "Images", f"{i//int(20 * F0)}.png"))
             data = {
                 "t": dt * i * np.ones(N),
                 "theta": theta,
-                "vx": v[:, 0],
-                "vy": v[:, 1],
                 "x": r[:, 0],
                 "y": r[:, 1],
             }
@@ -223,4 +194,4 @@ for i in range(Nt):
             pd.DataFrame(data).to_csv(
                 join(save_path, "Data.csv"), mode="a", header=header
             )
-            plt.pause(0.1)
+        plt.pause(0.1)
