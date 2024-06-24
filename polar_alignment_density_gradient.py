@@ -35,8 +35,9 @@ L = aspectRatio * l
 # Physical parameters
 F0 = 1.6  # Propulsion force
 Kc = 3  # Collision force
-K = 5  # Polarity-velocity coupling
+K = 1  # Polarity-velocity coupling
 h = 5  # Nematic field intensity
+K_phi = 20
 mu = 0  # Friction anisotropy
 epsilon = 0  # Friction asymmetry
 
@@ -82,12 +83,23 @@ def build_neigbouring_matrix():
 neighbours = build_neigbouring_matrix()
 
 
+def compute_density(r):
+
+    return
+
+
 def compute_forces_and_torques(r):
     Cij = (r // np.array([wx, wy])).astype(int)
     # 1D array encoding the index of the cell containing the particle
     C1d = Cij[:, 0] + Nx * Cij[:, 1]
     # One-hot encoding of the 1D cell array as a sparse matrix
     C = sp.eye(Nx * Ny, format="csr")[C1d]
+    # Density array
+    rho = C.sum(axis=0).reshape((Ny, Nx))
+    gradphix = (np.roll(rho, -1, axis=0) - np.roll(rho, 1, axis=0)) / 2 / wx
+    gradphiy = (np.roll(rho, -1, axis=1) - np.roll(rho, 1, axis=1)) / 2 / wy
+    gpx = np.ravel(gradphix)[C1d]
+    gpy = np.ravel(gradphiy)[C1d]
     # N x N array; inRange[i,j]=1 if particles i, j are in neighbouring cells, 0 otherwise
     inRange = C.dot(neighbours).dot(C.T)
 
@@ -117,15 +129,16 @@ def compute_forces_and_torques(r):
     Fx = np.array(Fij.multiply(xij).sum(axis=0)).flatten()
     Fy = np.array(Fij.multiply(yij).sum(axis=0)).flatten()
     idx_i, idx_j, _v = sp.find(dij)  # Get indices to compute torques
-    ind_torques = np.sin(2 * (theta[idx_i] - theta[idx_j]))
+    ind_torques = np.sin((theta[idx_i] - theta[idx_j]))
     tij = sp.csr_matrix((ind_torques, (idx_i, idx_j)), shape=(N, N))
     torque = np.array(tij.sum(axis=0)).flatten()
-    return Fx, Fy, torque
+    return Fx, Fy, torque, gpx, gpy
 
 
 # Initiate fields
 r = np.random.uniform([0, 0], [l, L], size=(N, 2))
 theta = np.random.uniform(0, 2 * np.pi, size=N)
+# theta[np.argwhere(np.logical_and(r[:, 0] > 0.25 * l, r[:, 0] < 0.75 * l)).flatten()] = 0
 
 avg_cos = []
 avg_cos3 = []
@@ -133,7 +146,7 @@ avg_cos3 = []
 save_path = join(
     "..",
     "Data",
-    "Circle_Meeting",
+    "Group_Meeting_0603",
     f"N={N}_phi={phi}_F0={F0}_Kc={Kc}_K={K}_h={h}",
 )
 if save_images:
@@ -159,7 +172,7 @@ for i in range(Nt):
     while pause:
         plt.pause(0.1)
     # Compute forces
-    Fx, Fy, torque = compute_forces_and_torques(r)
+    Fx, Fy, torque, gpx, gpy = compute_forces_and_torques(r)
     v = F0 * np.stack(
         [
             np.cos(theta),
@@ -168,10 +181,19 @@ for i in range(Nt):
         axis=-1,
     )
     F = F0 * np.stack([Kc * Fx, Kc * Fy], axis=-1)
+    gphi = np.stack([gpx, gpy], axis=-1)
     v += F
     xi = np.sqrt(2 * dt) * np.random.randn(N)
     e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
-    theta += dt * (-h * np.sin(2 * theta) + K * torque) + xi
+    theta += (
+        dt
+        * (
+            -h * np.sin(2 * theta)
+            + K * F0 * torque
+            + K_phi * np.einsum("ij, ij->i", -gphi, e_perp)
+        )
+        + xi
+    )
     theta %= 2 * np.pi
     r += dt * v
     r %= np.array([l, L])

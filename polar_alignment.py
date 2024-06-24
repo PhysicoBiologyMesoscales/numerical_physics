@@ -8,8 +8,19 @@ import tkinter as tk
 from tkinter import messagebox
 from shutil import rmtree
 import pandas as pd
+import sys
 
 plt.ion()
+
+# Flag to control pausing and resuming
+pause = False
+
+
+def toggle_pause(event):
+    global pause
+    if event.key == " ":
+        pause = not pause
+
 
 save_images = True
 
@@ -22,10 +33,10 @@ aspectRatio = 4.0
 l = np.sqrt(N * np.pi / aspectRatio / phi)
 L = aspectRatio * l
 # Physical parameters
-F0 = 2  # Propulsion force
+F0 = 1.6  # Propulsion force
 Kc = 3  # Collision force
-K = 3  # Polarity-velocity coupling
-h = 7  # Nematic field intensity
+K = 5  # Polarity-velocity coupling
+h = 5  # Nematic field intensity
 mu = 0  # Friction anisotropy
 epsilon = 0  # Friction asymmetry
 
@@ -35,6 +46,7 @@ dt = 5e-2 / F0
 # Display parameters
 displayHeight = 7.0
 fig = plt.figure(figsize=(displayHeight / aspectRatio * 2, displayHeight))
+fig.canvas.mpl_connect("key_press_event", toggle_pause)
 ax_ = fig.add_axes((0, 0, 1 / 2, 1))
 ax_theta = fig.add_axes((1 / 2, 0, 1 / 2, 1))
 for ax in [ax_, ax_theta]:
@@ -70,7 +82,7 @@ def build_neigbouring_matrix():
 neighbours = build_neigbouring_matrix()
 
 
-def compute_forces(r):
+def compute_forces_and_torques(r):
     Cij = (r // np.array([wx, wy])).astype(int)
     # 1D array encoding the index of the cell containing the particle
     C1d = Cij[:, 0] + Nx * Cij[:, 1]
@@ -104,12 +116,17 @@ def compute_forces(r):
     # Fij = 12 * (-dij).power(-13) - 6 * (-dij).power(-7)  # wca
     Fx = np.array(Fij.multiply(xij).sum(axis=0)).flatten()
     Fy = np.array(Fij.multiply(yij).sum(axis=0)).flatten()
-    return Fx, Fy
+    idx_i, idx_j, _v = sp.find(dij)  # Get indices to compute torques
+    ind_torques = np.sin((theta[idx_i] - theta[idx_j]))
+    tij = sp.csr_matrix((ind_torques, (idx_i, idx_j)), shape=(N, N))
+    torque = np.array(tij.sum(axis=0)).flatten()
+    return Fx, Fy, torque
 
 
 # Initiate fields
 r = np.random.uniform([0, 0], [l, L], size=(N, 2))
-theta = np.random.uniform(-np.pi, np.pi, size=N)
+theta = np.random.uniform(0, 2 * np.pi, size=N)
+# theta[np.argwhere(np.logical_and(r[:, 0] > 0.25 * l, r[:, 0] < 0.75 * l)).flatten()] = 0
 
 avg_cos = []
 avg_cos3 = []
@@ -118,7 +135,6 @@ save_path = join(
     "..",
     "Data",
     "Group_Meeting_0603",
-    "align_with_forces",
     f"N={N}_phi={phi}_F0={F0}_Kc={Kc}_K={K}_h={h}",
 )
 if save_images:
@@ -137,9 +153,14 @@ if save_images:
         makedirs(join(save_path, "Images"))
 
 
+base_arr = np.random.permutation(np.arange(Nx * Ny))
+
+
 for i in range(Nt):
+    while pause:
+        plt.pause(0.1)
     # Compute forces
-    Fx, Fy = compute_forces(r)
+    Fx, Fy, torque = compute_forces_and_torques(r)
     v = F0 * np.stack(
         [
             np.cos(theta),
@@ -151,12 +172,12 @@ for i in range(Nt):
     v += F
     xi = np.sqrt(2 * dt) * np.random.randn(N)
     e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
-    theta += dt * (-h * np.sin(2 * theta) + K * np.einsum("ij, ij->i", F, e_perp)) + xi
+    theta += dt * (-h * np.sin(2 * theta) + K * F0 * torque) + xi
     theta %= 2 * np.pi
     r += dt * v
     r %= np.array([l, L])
 
-    if i % int(20 * F0) == 1:
+    if i % int(10 * F0) == 1:
         ax_.cla()
         ax_.set_xlim(0, l)
         ax_.set_ylim(0, L)
@@ -166,7 +187,7 @@ for i in range(Nt):
             s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
             c=np.arange(N),
             vmin=0,
-            vmax=N,
+            vmax=N - 1,
         )
         ax_theta.cla()
         ax_theta.set_xlim(0, l)

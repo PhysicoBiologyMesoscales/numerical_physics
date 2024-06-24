@@ -19,7 +19,7 @@ if __name__ == "__main__":
             save_path = os.path.join(
                 r"C:\Users\nolan\Documents\PhD\Simulations\\",
                 "Data",
-                "Test_me",
+                "Force_computation",
                 "Batch",
                 f"ar={aspect_ratio}_N={N}_phi={phi}_v0={v0}_kc={kc}_k={k}_h={h}",
             )
