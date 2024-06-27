@@ -12,14 +12,14 @@ if __name__ == "__main__":
     kc = 3.0
     h = 0.0
     t_max = 100.0
-    v_arr = np.linspace(1.6, 2.1, 10)
-    k_arr = np.linspace(4 + 1 / 3, 5 - 1 / 3, 3)
+    v_arr = np.linspace(2, 2, 1)
+    k_arr = np.linspace(4.5, 4.5, 1)
     with tqdm(total=len(v_arr) * len(k_arr)) as progress_bar:
         for i, (v0, k) in enumerate(tqdm(product(v_arr, k_arr))):
             save_path = os.path.join(
                 r"C:\Users\nolan\Documents\PhD\Simulations\\",
                 "Data",
-                "Force_computation",
+                "Compute_forces",
                 "Batch",
                 f"ar={aspect_ratio}_N={N}_phi={phi}_v0={v0}_kc={kc}_k={k}_h={h}",
             )

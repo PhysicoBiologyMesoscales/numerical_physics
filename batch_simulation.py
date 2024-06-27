@@ -80,6 +80,7 @@ def main():
     # Cells lists number
     Nx = int(l / 2)
     Ny = int(L / 2)
+
     # Cells lists dimensions
     wx = l / Nx
     wy = L / Ny
@@ -132,8 +133,46 @@ def main():
         Fy = np.array(Fij.multiply(yij).sum(axis=0)).flatten()
         return Fx, Fy
 
+    def coarsegrain_field(r, theta, field, Nx_cg, Ny_cg, Nth):
+        if field.ndim == 1:
+            _field = np.array([field]).T
+        else:
+            _field = field
+        wx_cg = l / Nx_cg
+        wy_cg = L / Ny_cg
+        wth = 2 * np.pi / Nth
+        # We compute forces in (x, y, theta) space
+        r_th = np.concatenate([r, np.array([theta % (2 * np.pi)]).T], axis=-1)
+        # Build matrix and 1D encoding in (x, y, theta) space
+        Cijk = (r_th // np.array([wx_cg, wy_cg, wth])).astype(int)
+        C1d_cg = np.ravel_multi_index(Cijk.T, (Nx_cg, Ny_cg, Nth), order="C")
+        C = sp.eye(Nx_cg * Ny_cg * Nth, format="csr")[C1d_cg]
+        count = C.T.sum(axis=1)
+        field_cg = C.T @ _field / np.where(count == 0, 1.0, count)
+        return field_cg
+
+    def linear_inverse_sampling(x, left, right, a):
+        """Given a x value uniformly sampled in [0,1], returns a value sampled with linear pdf in [left, right]
+        a is the value of the pdf at the left bound, normalized to be in [0,2]
+        """
+        if left >= right:
+            raise (ValueError("Left bound should be inferior to right bound"))
+        if a < 0 or a > 2:
+            raise (ValueError("Probability can't be negative; please change a"))
+        if a == 1:
+            return left + (right - left) * x
+        return left + (right - left) * a / 2 / (1 - a) * (
+            np.sqrt(1 + 4 * x * (1 - a) / a**2) - 1
+        )
+
+    def linear_sample(left, right, a, size):
+        return linear_inverse_sampling(np.random.uniform(size=size), left, right, a)
+
     # Initiate fields
     r = np.random.uniform([0, 0], [l, L], size=(N, 2))
+    # x = linear_sample(0, l, 1.3, N)
+    # x = np.random.triangular(0, l / 2, l, size=N)
+    # r = np.stack([x, np.random.uniform(0, L, size=N)], axis=-1)
     theta = np.random.uniform(-np.pi, np.pi, size=N)
 
     save_path = parms.save_path
@@ -187,6 +226,11 @@ def main():
         r += dt * v
         r %= np.array([l, L])
 
+        Nx_cg, Ny_cg, Nth = Nx // 4, Ny // 4, 50
+        F_cg = coarsegrain_field(r, theta, F, Nx_cg, Ny_cg, Nth).reshape(
+            (Nx // 4, Ny // 4, 50, 2)
+        )
+
         if i % int(20 * v0) == 1:
             ax_.cla()
             ax_.set_xlim(0, l)
@@ -200,16 +244,10 @@ def main():
                 vmax=N,
             )
             ax_theta.cla()
-            ax_theta.set_xlim(0, l)
-            ax_theta.set_ylim(0, L)
-            ax_theta.scatter(
-                r[:, 0],
-                r[:, 1],
-                s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
-                c=theta,
-                vmin=0,
-                vmax=2 * np.pi,
-                cmap=cm.hsv,
+            ax_theta.imshow(
+                F_cg[:, :, 0, 0].T,
+                vmin=-v0 * kc / 2,
+                vmax=v0 * kc / 2,
             )
             if parms.plot_images:
                 print("plotting image !")
