@@ -28,8 +28,18 @@ def parse_args():
     parser.add_argument("h", help="Nematic field intensity", type=float)
     parser.add_argument("t_max", help="Max simulation time", type=float)
     parser.add_argument(
+        "--create_images",
+        help="Create plots of the simulation",
+        action="store_true",
+    )
+    parser.add_argument(
         "--plot_images",
         help="Plot simulation results in plt window",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--save_data",
+        help="Save simulation data in .csv file",
         action="store_true",
     )
     parser.add_argument(
@@ -169,17 +179,22 @@ def main():
         return linear_inverse_sampling(np.random.uniform(size=size), left, right, a)
 
     # Initiate fields
-    r = np.random.uniform([0, 0], [l, L], size=(N, 2))
+    # r = np.random.uniform([0, 0], [l, L], size=(N, 2))
     # x = linear_sample(0, l, 1.3, N)
-    # x = np.random.triangular(0, l / 2, l, size=N)
-    # r = np.stack([x, np.random.uniform(0, L, size=N)], axis=-1)
+    # x = np.random.uniform(0, l, size=N)
+    x = np.random.triangular(0, l / 2, l, size=N)
+    # y = np.random.uniform(0, L, size=N)
+    y = np.random.triangular(0, L / 2, L, size=N)
+    r = np.stack([x, y], axis=-1)
     theta = np.random.uniform(-np.pi, np.pi, size=N)
 
     save_path = parms.save_path
 
-    if parms.save_images:
+    if parms.save_data:
         try:
-            makedirs(join(save_path, "Images"))
+            makedirs(save_path)
+            if parms.save_images:
+                makedirs(join(save_path, "Images"))
         except FileExistsError:
             root = tk.Tk()
             root.withdraw()  # Hide the main window
@@ -190,7 +205,9 @@ def main():
             if not result:
                 raise (FileExistsError("Folder already exists; not overwriting"))
             rmtree(save_path)
-            makedirs(join(save_path, "Images"))
+            makedirs(save_path)
+            if parms.save_images:
+                makedirs(join(save_path, "Images"))
         with open(join(save_path, "parms.json"), "w") as jsonFile:
             json.dump(
                 {
@@ -232,34 +249,38 @@ def main():
         )
 
         if i % int(20 * v0) == 1:
-            ax_.cla()
-            ax_.set_xlim(0, l)
-            ax_.set_ylim(0, L)
-            ax_.scatter(
-                r[:, 0],
-                r[:, 1],
-                s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
-                c=np.arange(N),
-                vmin=0,
-                vmax=N,
-            )
-            ax_theta.cla()
-            ax_theta.imshow(
-                F_cg[:, :, 0, 0].T,
-                vmin=-v0 * kc / 2,
-                vmax=v0 * kc / 2,
-            )
-            if parms.plot_images:
-                print("plotting image !")
-                fig.show()
-                plt.pause(0.1)
-            if parms.save_images:
-                fig.savefig(join(save_path, "Images", f"{i//int(20 * v0)}.png"))
+            if parms.create_images:
+                ax_.cla()
+                ax_.set_xlim(0, l)
+                ax_.set_ylim(0, L)
+                ax_.scatter(
+                    r[:, 0],
+                    r[:, 1],
+                    s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
+                    c=np.arange(N),
+                    vmin=0,
+                    vmax=N,
+                )
+                ax_theta.cla()
+                ax_theta.imshow(
+                    F_cg[:, :, 0, 0].T,
+                    vmin=-v0 * kc / 2,
+                    vmax=v0 * kc / 2,
+                )
+                if parms.plot_images:
+                    print("plotting image !")
+                    fig.show()
+                    plt.pause(0.1)
+                if parms.save_images:
+                    fig.savefig(join(save_path, "Images", f"{i//int(20 * v0)}.png"))
+            if parms.save_data:
                 data = {
                     "t": dt * i * np.ones(N),
                     "theta": theta,
                     "x": r[:, 0],
                     "y": r[:, 1],
+                    "Fx": F[:, 0],
+                    "Fy": F[:, 1],
                 }
                 header = False
                 if i // int(20 * v0) == 0:
