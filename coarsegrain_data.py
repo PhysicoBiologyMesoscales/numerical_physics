@@ -3,17 +3,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import json
 import argparse
+import scipy.sparse as sp
 
 
 from os.path import join
-from sim_analysis import (
-    compute_coarsegrain_matrix,
-    coarsegrain_field,
-    compute_distribution,
-)
-from sklearn.linear_model import LinearRegression
-
-from scipy.ndimage import sobel
 
 
 def parse_args():
@@ -47,17 +40,41 @@ def main():
     Nx = args.nx
     Ny = int(Nx * asp)
     Nth = args.nth
-    dx, dy, dth = l / Nx, L / Ny, 2 * np.pi / Nth
+
+    def compute_coarsegrain_matrix(r, theta):
+        dx = l / Nx
+        dy = L / Ny
+        dth = 2 * np.pi / Nth
+        # We compute forces in (x, y, theta) space
+        r_th = np.concatenate([r, np.array([theta % (2 * np.pi)]).T], axis=-1)
+        # Build matrix and 1D encoding in (x, y, theta) space
+        Cijk = (r_th // np.array([dx, dy, dth])).astype(int)
+        C1d_cg = np.ravel_multi_index(Cijk.T, (Nx, Ny, Nth), order="C")
+        C = sp.eye(Nx * Ny * Nth, format="csr")[C1d_cg] / N
+        return C
+
+    def compute_distribution(C):
+        # Compute one-body distribution
+        return np.array(C.T.sum(axis=1)).reshape((Nx, Ny, Nth)).swapaxes(0, 1)
+
+    def coarsegrain_field(field, C):
+        if field.ndim == 1:
+            _field = np.array([field]).T
+        else:
+            _field = field
+        data_ndims = field.shape[-1]
+        field_cg = C.T @ _field
+        return field_cg.reshape((Nx, Ny, Nth, data_ndims)).swapaxes(0, 1)
 
     def coarsegrain_df(df: pd.DataFrame) -> pd.DataFrame:
         r = np.stack([df["x"], df["y"]], axis=-1)
         F = np.stack([df["Fx"], df["Fy"]], axis=-1)
 
-        C = compute_coarsegrain_matrix(r, df["theta"], l, L, Nx, Ny, Nth, N)
+        C = compute_coarsegrain_matrix(r, df["theta"])
 
-        psi = compute_distribution(C, Nx, Ny, Nth)
+        psi = compute_distribution(C)
 
-        F_cg = coarsegrain_field(F, C, Nx, Ny, Nth)
+        F_cg = coarsegrain_field(F, C)
 
         data = np.stack(
             [
@@ -89,8 +106,8 @@ if __name__ == "__main__":
     sim_path = (
         r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\temp"
     )
-    testargs = ["prog", sim_path, "20", "20"]
-    with patch.object(sys, "argv", testargs):
+    args = ["prog", sim_path, "20", "20"]
+    with patch.object(sys, "argv", args):
         main()
 
 
