@@ -40,17 +40,17 @@ def main():
     Nx = args.nx
     Ny = int(Nx * asp)
     Nth = args.nth
+    dx = l / Nx
+    dy = L / Ny
+    dth = 2 * np.pi / Nth
 
     def compute_coarsegrain_matrix(r, theta):
-        dx = l / Nx
-        dy = L / Ny
-        dth = 2 * np.pi / Nth
         # We compute forces in (x, y, theta) space
         r_th = np.concatenate([r, np.array([theta % (2 * np.pi)]).T], axis=-1)
         # Build matrix and 1D encoding in (x, y, theta) space
         Cijk = (r_th // np.array([dx, dy, dth])).astype(int)
         C1d_cg = np.ravel_multi_index(Cijk.T, (Nx, Ny, Nth), order="C")
-        C = sp.eye(Nx * Ny * Nth, format="csr")[C1d_cg] / N
+        C = sp.eye(Nx * Ny * Nth, format="csr")[C1d_cg] / N / dx / dy / dth
         return C
 
     def compute_distribution(C):
@@ -86,15 +86,27 @@ def main():
         )
 
         index = pd.MultiIndex.from_product(
-            [np.arange(Nx), np.arange(Ny), np.arange(Nth)], names=["x", "y", "theta"]
+            [np.arange(Ny), np.arange(Nx), np.arange(Nth)], names=["y", "x", "theta"]
         )
 
         cols = ["psi", "Fx", "Fy"]
 
         return pd.DataFrame(data, index=index, columns=cols)
 
+    def average_data(df):
+        rho = df["psi"].sum() * dth
+        rho_without_zero = np.where(rho == 0, 1.0, rho)
+        px = (df["psi"] * np.cos(df["theta"])).sum() * dth / rho_without_zero
+        py = (df["psi"] * np.sin(df["theta"])).sum() * dth / rho_without_zero
+        Fx = (df["psi"] * df["Fx"]).sum() * dth / rho_without_zero
+        Fy = (df["psi"] * df["Fy"]).sum() * dth / rho_without_zero
+        return pd.Series({"rho": rho, "px": px, "py": py, "Fx": Fx, "Fy": Fy})
+
     cg_data = full_data.groupby("t").apply(coarsegrain_df)
+    avg_data = cg_data.reset_index(level=3).groupby(["t", "x", "y"]).apply(average_data)
+
     cg_data.to_csv(join(sim_path, "cg_data.csv"))
+    avg_data.to_csv(join(sim_path, "avg_data.csv"))
     with open(join(sim_path, "cg_parms.json"), "w") as jsonFile:
         json.dump({"l": l, "L": L, "Nx": Nx, "Ny": Ny, "Nth": Nth}, jsonFile)
 
@@ -103,9 +115,7 @@ if __name__ == "__main__":
     import sys
     from unittest.mock import patch
 
-    sim_path = (
-        r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\temp"
-    )
+    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\Gradient_oblique"
     args = ["prog", sim_path, "20", "20"]
     with patch.object(sys, "argv", args):
         main()
