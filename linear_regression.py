@@ -1,10 +1,8 @@
 import xarray as xr
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from typing import Union, Iterable
+from typing import Iterable
 from numpy.typing import NDArray
-
-import traceback
 
 
 class LinearRegression_xr(LinearRegression):
