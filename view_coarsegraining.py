@@ -1,8 +1,6 @@
 import numpy as np
-import pandas as pd
 import holoviews as hv
 import panel as pn
-import json
 import argparse
 import xarray as xr
 from linear_regression import LinearRegression_xr
@@ -23,26 +21,35 @@ def parse_args():
 def main():
     parms = parse_args()
     sim_path = parms.sim_folder_path
-    # TODO Changer l'enregistrement des données pour charger directement des xarray
     cg_ds = xr.open_dataset(join(sim_path, "cg_data.nc"))
-    avg_ds = xr.open_dataset(join(sim_path, "avg_data.nc"))
     asp = cg_ds.attrs["L"] / cg_ds.attrs["l"]
 
-    avg_ds = avg_ds.assign(grad_rhox=lambda arr: arr.rho.roll(x=-1) - arr.rho.roll(x=1))
-    avg_ds = avg_ds.assign(grad_rhoy=lambda arr: arr.rho.roll(y=-1) - arr.rho.roll(y=1))
+    cg_ds = cg_ds.assign(
+        grad_rhox=lambda arr: (
+            ["t", "y", "x"],
+            (arr.rho.roll(x=-1) - arr.rho.roll(x=1)).data,
+            {"type": "vector", "dir": "x"},
+        )
+    )
+    cg_ds = cg_ds.assign(
+        grad_rhoy=lambda arr: (
+            ["t", "y", "x"],
+            (arr.rho.roll(y=-1) - arr.rho.roll(y=1)).data,
+            {"type": "vector", "dir": "y"},
+        )
+    )
 
     # Linear regression fit of the forces with fields (grad_rho, p)
-    Nx, Ny = avg_ds.Nx, avg_ds.Ny
-    lr = LinearRegression_xr()
-    lr.fit(avg_ds)
-    avg_ds = lr.predict_on_dataset(avg_ds)
+    # lr = LinearRegression_xr()
+    # lr.fit(cg_ds)
+    # cg_ds = lr.predict_on_dataset(cg_ds)
 
-    avg_ds["F"] = np.sqrt(avg_ds["Fx"] ** 2 + avg_ds["Fy"] ** 2)
-    avg_ds["F_angle"] = np.arctan2(avg_ds["Fy"], avg_ds["Fx"])
-    avg_ds["p"] = avg_ds["rho"] * np.sqrt(avg_ds["px"] ** 2 + avg_ds["py"] ** 2)
-    avg_ds["p_angle"] = np.arctan2(avg_ds["py"], avg_ds["px"])
-    avg_ds["F_pred"] = np.sqrt(avg_ds["F_predx"] ** 2 + avg_ds["F_predy"] ** 2)
-    avg_ds["F_pred_angle"] = np.arctan2(avg_ds["F_predy"], avg_ds["F_predx"])
+    cg_ds["F"] = np.sqrt(cg_ds["Fx_avg"] ** 2 + cg_ds["Fy_avg"] ** 2)
+    cg_ds["F_angle"] = np.arctan2(cg_ds["Fy_avg"], cg_ds["Fx_avg"])
+    cg_ds["p"] = cg_ds["rho"] * np.sqrt(cg_ds["px"] ** 2 + cg_ds["py"] ** 2)
+    cg_ds["p_angle"] = np.arctan2(cg_ds["py"], cg_ds["px"])
+    # cg_ds["F_pred"] = np.sqrt(cg_ds["F_predx"] ** 2 + cg_ds["F_predy"] ** 2)
+    # cg_ds["F_pred_angle"] = np.arctan2(cg_ds["F_predy"], cg_ds["F_predx"])
 
     plot_F = pn.widgets.Checkbox(name="F")
     color_F = pn.widgets.ColorPicker(name="F color", value="red")
@@ -53,11 +60,11 @@ def main():
     select_cmap = pn.widgets.Select(
         name="Color Map", value="blues", options=["blues", "jet", "Reds"]
     )
-    list_t = list(avg_ds.t.data)
+    list_t = list(cg_ds.t.data)
     t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
 
     def plot_data(t, cmap, plot_F, plot_p, plot_Fpred, f_col, p_col, fpred_col):
-        t_data = avg_ds.sel(t=t)
+        t_data = cg_ds.drop_dims("theta").sel(t=t)
         alpha_F = 0
         alpha_p = 0
         alpha_Fpred = 0
@@ -70,7 +77,7 @@ def main():
         return (
             hv.HeatMap((t_data["x"], t_data["y"], t_data["rho"])).opts(
                 cmap=cmap,
-                clim=(float(avg_ds.rho.min()), float(avg_ds.rho.max())),
+                clim=(float(cg_ds.rho.min()), float(cg_ds.rho.max())),
                 width=400,
                 height=int(asp * 400),
             )
@@ -87,16 +94,16 @@ def main():
             * hv.VectorField((t_data["x"], t_data["y"], t_data["p_angle"], t_data["p"]))
             .opts(alpha=alpha_p, color=p_col)
             .opts(magnitude=hv.dim("Magnitude").norm())
-            * hv.VectorField(
-                (
-                    t_data["x"],
-                    t_data["y"],
-                    t_data["F_pred_angle"],
-                    t_data["F_pred"],
-                )
-            )
-            .opts(alpha=alpha_Fpred, color=fpred_col)
-            .opts(magnitude=hv.dim("Magnitude").norm())
+            # * hv.VectorField(
+            #     (
+            #         t_data["x"],
+            #         t_data["y"],
+            #         t_data["F_pred_angle"],
+            #         t_data["F_pred"],
+            #     )
+            # )
+            # .opts(alpha=alpha_Fpred, color=fpred_col)
+            # .opts(magnitude=hv.dim("Magnitude").norm())
         )
 
     dmap = hv.DynamicMap(
@@ -123,8 +130,8 @@ def main():
         ),
         dmap,
     )
-
-    return cg_ds, avg_ds, row, lr
+    lr = None
+    return cg_ds, row, lr
 
 
 if __name__ == "__main__":
@@ -135,5 +142,5 @@ if __name__ == "__main__":
     sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\ar=1.5_N=40000_phi=1.0_v0=2.0_kc=3.0_k=4.5_h=0.0"
     args = ["prog", sim_path]
     with patch.object(sys, "argv", args):
-        cg_ds, avg_ds, row, lr = main()
+        cg_ds, row, lr = main()
         row

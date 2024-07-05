@@ -94,25 +94,6 @@ def main():
 
         return pd.DataFrame(data, index=index, columns=cols)
 
-    def average_data(ds):
-        rho = ds["psi"].sum(dim="theta") * dth
-        rho_wo_zero = np.where(rho == 0, 1.0, rho)
-        px = (ds["psi"] * np.cos(ds["theta"])).sum(dim="theta") * dth / rho_wo_zero
-        py = (ds["psi"] * np.sin(ds["theta"])).sum(dim="theta") * dth / rho_wo_zero
-        Fx = (ds["psi"] * ds["Fx"]).sum(dim="theta") * dth / rho_wo_zero
-        Fy = (ds["psi"] * ds["Fy"]).sum(dim="theta") * dth / rho_wo_zero
-        return xr.Dataset(
-            data_vars=dict(
-                rho=(["t", "y", "x"], rho.data),
-                px=(["t", "y", "x"], px.data),
-                py=(["t", "y", "x"], py.data),
-                Fx=(["t", "y", "x"], Fx.data),
-                Fy=(["t", "y", "x"], Fy.data),
-            ),
-            coords=rho.coords,
-            attrs=ds.attrs,
-        )
-
     cg_data = (
         full_data.groupby("t")
         .apply(coarsegrain_df)
@@ -130,10 +111,43 @@ def main():
             }
         )
     )
-    avg_data = average_data(cg_data)
+
+    cg_data = cg_data.assign(
+        rho=(
+            ["t", "y", "x"],
+            cg_data.psi.sum(dim="theta").data * dth,
+            {"type": "scalar"},
+        )
+    )
+    rho_wo_zero = np.where(cg_data.rho == 0, 1.0, cg_data.rho)
+    cg_data = cg_data.assign(
+        px=(
+            ["t", "y", "x"],
+            (cg_data.psi * np.cos(cg_data.theta)).sum(dim="theta").data
+            * dth
+            / rho_wo_zero,
+            {"type": "vector", "dir": "x"},
+        ),
+        py=(
+            ["t", "y", "x"],
+            (cg_data.psi * np.sin(cg_data.theta)).sum(dim="theta").data
+            * dth
+            / rho_wo_zero,
+            {"type": "vector", "dir": "y"},
+        ),
+        Fx_avg=(
+            ["t", "y", "x"],
+            (cg_data.psi * cg_data.Fx).sum(dim="theta").data * dth / rho_wo_zero,
+            {"type": "vector", "dir": "x"},
+        ),
+        Fy_avg=(
+            ["t", "y", "x"],
+            (cg_data.psi * cg_data.Fy).sum(dim="theta").data * dth / rho_wo_zero,
+            {"type": "vector", "dir": "y"},
+        ),
+    )
 
     cg_data.to_netcdf(join(sim_path, "cg_data.nc"))
-    avg_data.to_netcdf(join(sim_path, "avg_data.nc"))
 
 
 if __name__ == "__main__":
