@@ -5,7 +5,7 @@ import panel as pn
 import json
 import argparse
 import xarray as xr
-from sklearn.linear_model import LinearRegression
+from linear_regression import LinearRegression_xr
 
 from os.path import join
 
@@ -20,25 +20,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def set_data(ds):
-    X = np.stack(
-        [
-            np.concatenate(
-                [
-                    ds.grad_rho_x.data.flatten(),
-                    ds.grad_rho_y.data.flatten(),
-                ]
-            ),
-            np.concatenate(
-                [(ds.rho * ds.px).data.flatten(), (ds.rho * ds.py).data.flatten()]
-            ),
-        ],
-        axis=-1,
-    )
-    y = np.concatenate([ds.Fx.data.flatten(), ds.Fy.data.flatten()])
-    return X, y
-
-
 def main():
     parms = parse_args()
     sim_path = parms.sim_folder_path
@@ -47,30 +28,21 @@ def main():
     avg_ds = xr.open_dataset(join(sim_path, "avg_data.nc"))
     asp = cg_ds.attrs["L"] / cg_ds.attrs["l"]
 
-    avg_ds = avg_ds.assign(
-        grad_rho_x=lambda arr: arr.rho.roll(x=-1) - arr.rho.roll(x=1)
-    )
-    avg_ds = avg_ds.assign(
-        grad_rho_y=lambda arr: arr.rho.roll(y=-1) - arr.rho.roll(y=1)
-    )
+    avg_ds = avg_ds.assign(grad_rhox=lambda arr: arr.rho.roll(x=-1) - arr.rho.roll(x=1))
+    avg_ds = avg_ds.assign(grad_rhoy=lambda arr: arr.rho.roll(y=-1) - arr.rho.roll(y=1))
 
     # Linear regression fit of the forces with fields (grad_rho, p)
-    X, y = set_data(avg_ds)
-    lr = LinearRegression()
-    lr.fit(X, y)
     Nx, Ny = avg_ds.Nx, avg_ds.Ny
-    Fpred = lr.predict(X).reshape((2, avg_ds.sizes["t"], Ny, Nx))
-    avg_ds["Fpredx"] = (["t", "y", "x"], Fpred[0])
-    avg_ds["Fpredy"] = (["t", "y", "x"], Fpred[1])
-
-    # avg_ds.assign(F_pred = lambda x: lr.predict(x[]))
+    lr = LinearRegression_xr()
+    lr.fit(avg_ds)
+    avg_ds = lr.predict_on_dataset(avg_ds)
 
     avg_ds["F"] = np.sqrt(avg_ds["Fx"] ** 2 + avg_ds["Fy"] ** 2)
     avg_ds["F_angle"] = np.arctan2(avg_ds["Fy"], avg_ds["Fx"])
     avg_ds["p"] = avg_ds["rho"] * np.sqrt(avg_ds["px"] ** 2 + avg_ds["py"] ** 2)
     avg_ds["p_angle"] = np.arctan2(avg_ds["py"], avg_ds["px"])
-    avg_ds["Fpred"] = np.sqrt(avg_ds["Fpredx"] ** 2 + avg_ds["Fpredy"] ** 2)
-    avg_ds["Fpred_angle"] = np.arctan2(avg_ds["Fpredy"], avg_ds["Fpredx"])
+    avg_ds["F_pred"] = np.sqrt(avg_ds["F_predx"] ** 2 + avg_ds["F_predy"] ** 2)
+    avg_ds["F_pred_angle"] = np.arctan2(avg_ds["F_predy"], avg_ds["F_predx"])
 
     plot_F = pn.widgets.Checkbox(name="F")
     color_F = pn.widgets.ColorPicker(name="F color", value="red")
@@ -107,7 +79,7 @@ def main():
                     t_data["x"],
                     t_data["y"],
                     t_data["F_angle"],
-                    t_data["F"] / t_data["F"].mean(),
+                    t_data["F"],
                 )
             )
             .opts(alpha=alpha_F, color=f_col)
@@ -119,8 +91,8 @@ def main():
                 (
                     t_data["x"],
                     t_data["y"],
-                    t_data["Fpred_angle"],
-                    t_data["Fpred"] / t_data["F"].mean(),
+                    t_data["F_pred_angle"],
+                    t_data["F_pred"],
                 )
             )
             .opts(alpha=alpha_Fpred, color=fpred_col)
@@ -160,7 +132,7 @@ if __name__ == "__main__":
     from unittest.mock import patch
 
     pn.extension()
-    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\Gradient_oblique"
+    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\ar=1.5_N=40000_phi=1.0_v0=2.0_kc=3.0_k=4.5_h=0.0"
     args = ["prog", sim_path]
     with patch.object(sys, "argv", args):
         cg_ds, avg_ds, row, lr = main()
