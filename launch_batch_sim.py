@@ -21,7 +21,7 @@ if __name__ == "__main__":
                 "Data",
                 "Compute_forces",
                 "Batch",
-                "Gradient_oblique",
+                "_temp",
                 # f"ar={aspect_ratio}_N={N}_phi={phi}_v0={v0}_kc={kc}_k={k}_h={h}",
             )
             print(f"Launching simulation for v0={v0} and k={k}")

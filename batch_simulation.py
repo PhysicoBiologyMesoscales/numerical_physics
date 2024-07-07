@@ -218,6 +218,7 @@ def main():
                     "kc": kc,
                     "k": k,
                     "h": h,
+                    "Nt": Nt,
                 },
                 jsonFile,
             )
@@ -285,9 +286,9 @@ def main():
                 header = False
                 if i // int(20 * v0) == 0:
                     header = True
-                pd.DataFrame(data).to_csv(
-                    join(save_path, "Data.csv"), mode="a", header=header
-                )
+                df = pd.DataFrame(data, index=np.arange(N))
+                df.index.set_names("p_id", inplace=True)
+                df.to_csv(join(save_path, "Data.csv"), mode="a", header=header)
 
 
 if __name__ == "__main__":
