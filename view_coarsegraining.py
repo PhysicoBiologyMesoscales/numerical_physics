@@ -60,10 +60,20 @@ def main():
                 fields[attr_value].append(variable)
         return fields
 
+    def list_fields(ds: xr.Dataset, **kwargs):
+        list_fields = []
+        for field in ds.filter_by_attrs(**kwargs):
+            field_name = ds[field].attrs["name"]
+            if field_name in list_fields:
+                continue
+            list_fields.append(field_name)
+        return list_fields
+
     dic_vector_widgets = {}
     dims = dict(cg_ds.sizes)
     dims.pop("theta")
-    for vector_field in ["polarity", "force", "force_pred"]:
+
+    for vector_field in list_fields(cg_ds, type="vector", average=1):
         x_data = (
             cg_ds.filter_by_attrs(type="vector", dir="x", name=vector_field, average=1)
             .to_dataarray()
@@ -82,10 +92,10 @@ def main():
             list(dims.keys()),
             np.arctan2(y_data, x_data),
         )
-        dic_vector_widgets[vector_field] = {
-            "checkbox": pn.widgets.Checkbox(name=vector_field)
-        }
-        dic_vector_widgets[vector_field]["color"] = pn.widgets.ColorPicker(
+        dic_vector_widgets[f"{vector_field}_checkbox"] = pn.widgets.Checkbox(
+            name=vector_field
+        )
+        dic_vector_widgets[f"{vector_field}_color"] = pn.widgets.ColorPicker(
             name=f"{vector_field} color", value="red"
         )
 
@@ -95,7 +105,7 @@ def main():
     list_t = list(cg_ds.t.data)
     t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
 
-    def plot_data(t, cmap, dic_widgets):
+    def plot_data(t, cmap, **widgets):
         t_data = cg_ds.sel(t=t)
         plot = hv.HeatMap((t_data["x"], t_data["y"], t_data["rho"])).opts(
             cmap=cmap,
@@ -103,7 +113,7 @@ def main():
             width=400,
             height=int(asp * 400),
         )
-        for vector_field in ["polarity", "force", "force_pred"]:
+        for vector_field in list_fields(cg_ds, type="vector", average=1):
             plot = plot * hv.VectorField(
                 (
                     t_data["x"],
@@ -112,15 +122,20 @@ def main():
                     t_data[f"{vector_field}_mag"],
                 )
             ).opts(
-                alpha=1.0 if dic_widgets[vector_field]["checkbox"].value else 0,
-                color=dic_widgets[vector_field]["color"].value,
+                alpha=1.0 if widgets[f"{vector_field}_checkbox"] else 0,
+                color=widgets[f"{vector_field}_color"],
             ).opts(
                 magnitude=hv.dim("Magnitude").norm()
             )
         return plot
 
     dmap = hv.DynamicMap(
-        pn.bind(plot_data, t=t_slider, cmap=select_cmap, dic_widgets=dic_vector_widgets)
+        pn.bind(
+            plot_data,
+            t=t_slider,
+            cmap=select_cmap,
+            **dic_vector_widgets,
+        )
     )
 
     row = pn.Row(
@@ -130,10 +145,10 @@ def main():
                 select_cmap,
                 *[
                     pn.Row(
-                        dic_vector_widgets[field]["checkbox"],
-                        dic_vector_widgets[field]["color"],
+                        dic_vector_widgets[f"{field}_checkbox"],
+                        dic_vector_widgets[f"{field}_color"],
                     )
-                    for field in dic_vector_widgets.keys()
+                    for field in list_fields(cg_ds, type="vector", average=1)
                 ],
             )
         ),
