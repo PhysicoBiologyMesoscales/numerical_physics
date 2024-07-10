@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 
 class LinearRegression_xr(LinearRegression):
 
-    def __init__(self, target_field, training_fields):
+    def __init__(self, target_field, training_fields, poly_degree: int = 1):
         super().__init__()
         self.training_fields = None
         self.target_field = None
@@ -15,6 +15,7 @@ class LinearRegression_xr(LinearRegression):
         self.exclude_dims = None
         self.target_field = target_field
         self.training_fields = sorted(training_fields)
+        self.poly_degree = poly_degree
 
     def set_input_data(self, ds: xr.Dataset) -> NDArray:
         # Sorting is necessary to avoid mismatch in data order
@@ -53,7 +54,7 @@ class LinearRegression_xr(LinearRegression):
                     ],
                     axis=-1,
                 )
-                for i in range(3)
+                for i in range(self.poly_degree)
             ],
             axis=1,
         )

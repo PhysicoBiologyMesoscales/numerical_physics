@@ -59,7 +59,9 @@ def main():
     cg_ds.assign(Fx=cg_ds.Fx / cg_ds.psi, Fy=cg_ds.Fy / cg_ds.psi)
 
     # Linear regression fit of the forces with fields (grad_rho, p)
-    lr = LinearRegression_xr(target_field="F", training_fields=["grad_rho", "p", "e"])
+    lr = LinearRegression_xr(
+        target_field="F", training_fields=["grad_rho", "p", "e"], poly_degree=2
+    )
     lr.fit(cg_ds)
     cg_ds = lr.predict_on_dataset(cg_ds)
 
