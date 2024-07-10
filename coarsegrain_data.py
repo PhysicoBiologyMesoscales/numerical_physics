@@ -128,12 +128,12 @@ def main():
         Fx_avg=(
             ["t", "y", "x"],
             (cg_data.psi * cg_data.Fx).sum(dim="theta").data * dth / rho_wo_zero,
-            {"name": "force", "average": 1, "type": "vector", "dir": "x"},
+            {"name": "force_avg", "average": 1, "type": "vector", "dir": "x"},
         ),
         Fy_avg=(
             ["t", "y", "x"],
             (cg_data.psi * cg_data.Fy).sum(dim="theta").data * dth / rho_wo_zero,
-            {"name": "force", "average": 1, "type": "vector", "dir": "y"},
+            {"name": "force_avg", "average": 1, "type": "vector", "dir": "y"},
         ),
     )
 

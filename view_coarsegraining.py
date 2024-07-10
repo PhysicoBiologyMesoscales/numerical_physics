@@ -23,24 +23,45 @@ def main():
     sim_path = parms.sim_folder_path
     cg_ds = xr.open_dataset(join(sim_path, "cg_data.nc"))
     asp = cg_ds.attrs["L"] / cg_ds.attrs["l"]
+    cg_ds = cg_ds.assign(
+        px=(cg_ds.psi.dims, (cg_ds.psi * cg_ds.rho * cg_ds.px).data, cg_ds.px.attrs),
+        py=(cg_ds.psi.dims, (cg_ds.psi * cg_ds.rho * cg_ds.py).data, cg_ds.py.attrs),
+    )
 
     cg_ds = cg_ds.assign(
         grad_rhox=lambda arr: (
-            ["t", "y", "x"],
-            (arr.rho.roll(x=-1) - arr.rho.roll(x=1)).data,
+            ["t", "theta", "y", "x"],
+            (arr.psi * (arr.rho.roll(x=-1) - arr.rho.roll(x=1))).data,
             {"name": "density_gradient", "average": 1, "type": "vector", "dir": "x"},
         )
     )
     cg_ds = cg_ds.assign(
         grad_rhoy=lambda arr: (
-            ["t", "y", "x"],
-            (arr.rho.roll(y=-1) - arr.rho.roll(y=1)).data,
+            ["t", "theta", "y", "x"],
+            (arr.psi * (arr.rho.roll(y=-1) - arr.rho.roll(y=1))).data,
             {"name": "density_gradient", "average": 1, "type": "vector", "dir": "y"},
         )
     )
 
+    cg_ds = cg_ds.assign(
+        ex=(
+            ["t", "theta", "y", "x"],
+            (cg_ds.psi * (cg_ds.rho * np.cos(cg_ds.theta))).data,
+            {"name": "e", "average": 0, "type": "vector", "dir": "x"},
+        ),
+        ey=(
+            ["t", "theta", "y", "x"],
+            (cg_ds.psi * (cg_ds.rho * np.sin(cg_ds.theta))).data,
+            {"name": "e", "average": 0, "type": "vector", "dir": "y"},
+        ),
+    )
+
+    cg_ds.assign(Fx=cg_ds.Fx / cg_ds.psi, Fy=cg_ds.Fy / cg_ds.psi)
+
     # Linear regression fit of the forces with fields (grad_rho, p)
-    lr = LinearRegression_xr()
+    lr = LinearRegression_xr(
+        target_field="force", training_fields=["density_gradient", "polarity", "e"]
+    )
     lr.fit(cg_ds)
     cg_ds = lr.predict_on_dataset(cg_ds)
 
@@ -71,18 +92,21 @@ def main():
 
     dic_vector_widgets = {}
     dims = dict(cg_ds.sizes)
-    dims.pop("theta")
 
-    for vector_field in list_fields(cg_ds, type="vector", average=1):
+    for vector_field in list_fields(cg_ds, type="vector"):
         x_data = (
-            cg_ds.filter_by_attrs(type="vector", dir="x", name=vector_field, average=1)
+            cg_ds.filter_by_attrs(type="vector", dir="x", name=vector_field)
             .to_dataarray()
-            .data[0]
+            .broadcast_like(cg_ds)
+            .squeeze(dim="variable", drop=True)
+            .data
         )
         y_data = (
-            cg_ds.filter_by_attrs(type="vector", dir="y", name=vector_field, average=1)
+            cg_ds.filter_by_attrs(type="vector", dir="y", name=vector_field)
             .to_dataarray()
-            .data[0]
+            .broadcast_like(cg_ds)
+            .squeeze(dim="variable", drop=True)
+            .data
         )
         cg_ds[f"{vector_field}_mag"] = (
             list(dims.keys()),
@@ -99,27 +123,32 @@ def main():
             name=f"{vector_field} color", value="red"
         )
 
+    list_t = list(cg_ds.t.data)
+    t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
+    list_th = list(cg_ds.theta.data)
+    th_slider = pn.widgets.DiscreteSlider(name="theta", options=list_th)
+    select_color_field = pn.widgets.Select(
+        name="Color by field", value="psi", options=["psi", "rho"]
+    )
     select_cmap = pn.widgets.Select(
         name="Color Map", value="blues", options=["blues", "jet", "Reds"]
     )
-    list_t = list(cg_ds.t.data)
-    t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
 
-    def plot_data(t, cmap, **widgets):
-        t_data = cg_ds.sel(t=t)
-        plot = hv.HeatMap((t_data["x"], t_data["y"], t_data["rho"])).opts(
+    def plot_data(t, th, col_field, cmap, **widgets):
+        data = cg_ds.sel(t=t, theta=th)
+        plot = hv.HeatMap((data["x"], data["y"], data[col_field])).opts(
             cmap=cmap,
-            clim=(float(cg_ds.rho.min()), float(cg_ds.rho.max())),
+            clim=(float(cg_ds[col_field].min()), float(cg_ds[col_field].max())),
             width=400,
             height=int(asp * 400),
         )
-        for vector_field in list_fields(cg_ds, type="vector", average=1):
+        for vector_field in list_fields(cg_ds, type="vector"):
             plot = plot * hv.VectorField(
                 (
-                    t_data["x"],
-                    t_data["y"],
-                    t_data[f"{vector_field}_angle"],
-                    t_data[f"{vector_field}_mag"],
+                    data["x"],
+                    data["y"],
+                    data[f"{vector_field}_angle"],
+                    data[f"{vector_field}_mag"],
                 )
             ).opts(
                 alpha=1.0 if widgets[f"{vector_field}_checkbox"] else 0,
@@ -133,6 +162,8 @@ def main():
         pn.bind(
             plot_data,
             t=t_slider,
+            th=th_slider,
+            col_field=select_color_field,
             cmap=select_cmap,
             **dic_vector_widgets,
         )
@@ -142,20 +173,21 @@ def main():
         pn.WidgetBox(
             pn.Column(
                 t_slider,
+                th_slider,
+                select_color_field,
                 select_cmap,
                 *[
                     pn.Row(
                         dic_vector_widgets[f"{field}_checkbox"],
                         dic_vector_widgets[f"{field}_color"],
                     )
-                    for field in list_fields(cg_ds, type="vector", average=1)
+                    for field in list_fields(cg_ds, type="vector")
                 ],
             )
         ),
         dmap,
     )
-    lr = None
-    return cg_ds, row, lr, dic_vector_widgets
+    return cg_ds, row, lr
 
 
 if __name__ == "__main__":
@@ -168,5 +200,5 @@ if __name__ == "__main__":
     )
     args = ["prog", sim_path]
     with patch.object(sys, "argv", args):
-        cg_ds, row, lr, _dcw = main()
+        cg_ds, row, lr = main()
         row
