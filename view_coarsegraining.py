@@ -32,14 +32,14 @@ def main():
         grad_rhox=lambda arr: (
             ["t", "theta", "y", "x"],
             (arr.psi * (arr.rho.roll(x=-1) - arr.rho.roll(x=1))).data,
-            {"name": "density_gradient", "average": 1, "type": "vector", "dir": "x"},
+            {"name": "grad_rho", "average": 1, "type": "vector", "dir": "x"},
         )
     )
     cg_ds = cg_ds.assign(
         grad_rhoy=lambda arr: (
             ["t", "theta", "y", "x"],
             (arr.psi * (arr.rho.roll(y=-1) - arr.rho.roll(y=1))).data,
-            {"name": "density_gradient", "average": 1, "type": "vector", "dir": "y"},
+            {"name": "grad_rho", "average": 1, "type": "vector", "dir": "y"},
         )
     )
 
@@ -59,9 +59,7 @@ def main():
     cg_ds.assign(Fx=cg_ds.Fx / cg_ds.psi, Fy=cg_ds.Fy / cg_ds.psi)
 
     # Linear regression fit of the forces with fields (grad_rho, p)
-    lr = LinearRegression_xr(
-        target_field="force", training_fields=["density_gradient", "polarity", "e"]
-    )
+    lr = LinearRegression_xr(target_field="F", training_fields=["grad_rho", "p", "e"])
     lr.fit(cg_ds)
     cg_ds = lr.predict_on_dataset(cg_ds)
 

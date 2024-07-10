@@ -62,7 +62,7 @@ def main():
                 psi=(
                     ["theta", "y", "x"],
                     np.array(C.sum(axis=1)).reshape((Nth, Ny, Nx)),
-                    {"name": "density", "average": 0},
+                    {"name": "psi", "average": 0},
                 )
             ),
             coords=dict(
@@ -73,14 +73,14 @@ def main():
             Fx=(
                 ["theta", "y", "x"],
                 (C @ ds.Fx.data).reshape((Nth, Ny, Nx)),
-                {"name": "force", "average": 0, "type": "vector", "dir": "x"},
+                {"name": "F", "average": 0, "type": "vector", "dir": "x"},
             )
         )
         new_ds = new_ds.assign(
             Fy=(
                 ["theta", "y", "x"],
                 (C @ ds.Fy.data).reshape((Nth, Ny, Nx)),
-                {"name": "force", "average": 0, "type": "vector", "dir": "y"},
+                {"name": "F", "average": 0, "type": "vector", "dir": "y"},
             )
         )
         return new_ds
@@ -106,7 +106,7 @@ def main():
         rho=(
             ["t", "y", "x"],
             cg_data.psi.sum(dim="theta").data * dth,
-            {"name": "density", "average": 1, "type": "scalar"},
+            {"name": "rho", "average": 1, "type": "scalar"},
         )
     )
     rho_wo_zero = np.where(cg_data.rho == 0, 1.0, cg_data.rho)
@@ -116,24 +116,24 @@ def main():
             (cg_data.psi * np.cos(cg_data.theta)).sum(dim="theta").data
             * dth
             / rho_wo_zero,
-            {"name": "polarity", "average": 1, "type": "vector", "dir": "x"},
+            {"name": "p", "average": 1, "type": "vector", "dir": "x"},
         ),
         py=(
             ["t", "y", "x"],
             (cg_data.psi * np.sin(cg_data.theta)).sum(dim="theta").data
             * dth
             / rho_wo_zero,
-            {"name": "polarity", "average": 1, "type": "vector", "dir": "y"},
+            {"name": "p", "average": 1, "type": "vector", "dir": "y"},
         ),
         Fx_avg=(
             ["t", "y", "x"],
             (cg_data.psi * cg_data.Fx).sum(dim="theta").data * dth / rho_wo_zero,
-            {"name": "force_avg", "average": 1, "type": "vector", "dir": "x"},
+            {"name": "F_avg", "average": 1, "type": "vector", "dir": "x"},
         ),
         Fy_avg=(
             ["t", "y", "x"],
             (cg_data.psi * cg_data.Fy).sum(dim="theta").data * dth / rho_wo_zero,
-            {"name": "force_avg", "average": 1, "type": "vector", "dir": "y"},
+            {"name": "F_avg", "average": 1, "type": "vector", "dir": "y"},
         ),
     )
 
