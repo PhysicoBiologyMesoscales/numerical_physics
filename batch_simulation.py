@@ -123,11 +123,16 @@ def main():
 
         # Compute direction vectors and apply periodic boundary conditions
         xij = x_ - x_.T
-        x_bound = (xij.data > l / 2).astype(int)
-        xij.data += l * (x_bound.T - x_bound)
+        x_bound_plus = (xij.data > l / 2).astype(int)
+        xij.data -= l * x_bound_plus
+        x_bound_minus = (xij.data < -l / 2).astype(int)
+        xij.data += l * x_bound_minus
+
         yij = y_ - y_.T
-        y_bound = (yij.data > L / 2).astype(int)
-        yij.data += L * (y_bound.T - y_bound)
+        y_bound_plus = (yij.data > L / 2).astype(int)
+        yij.data -= L * y_bound_plus
+        y_bound_minus = (yij.data < -L / 2).astype(int)
+        yij.data += L * y_bound_minus
 
         # particle-particle distance for interacting particles
         dij = (xij.power(2) + yij.power(2)).power(0.5)
@@ -179,13 +184,13 @@ def main():
         return linear_inverse_sampling(np.random.uniform(size=size), left, right, a)
 
     # Initiate fields
-    # r = np.random.uniform([0, 0], [l, L], size=(N, 2))
+    r = np.random.uniform([0, 0], [l, L], size=(N, 2))
     # x = linear_sample(0, l, 1.3, N)
     # x = np.random.uniform(0, l, size=N)
-    x = np.random.triangular(0, l / 2, l, size=N)
+    # x = np.random.triangular(0, l / 2, l, size=N)
     # y = np.random.uniform(0, L, size=N)
-    y = np.random.triangular(0, L / 2, L, size=N)
-    r = np.stack([x, y], axis=-1)
+    # y = np.random.triangular(0, L / 2, L, size=N)
+    # r = np.stack([x, y], axis=-1)
     theta = np.random.uniform(-np.pi, np.pi, size=N)
 
     save_path = parms.save_path
@@ -219,6 +224,8 @@ def main():
                     "k": k,
                     "h": h,
                     "Nt": Nt,
+                    "l": l,
+                    "L": L,
                 },
                 jsonFile,
             )
