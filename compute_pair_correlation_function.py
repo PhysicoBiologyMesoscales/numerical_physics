@@ -15,6 +15,9 @@ def parse_args():
     parser.add_argument(
         "sim_folder_path", help="Path to folder containing simulation data", type=str
     )
+    parser.add_argument(
+        "r_max", help="Maximum radius to compute pair-correlation function", type=float
+    )
     return parser.parse_args()
 
 
@@ -73,7 +76,7 @@ def main():
         neigh_y = sp.dia_matrix((datay, offsetsy), shape=(Ny, Ny))
         return sp.kron(neigh_y, neigh_x)
 
-    neigh_range = 5
+    neigh_range = int(np.ceil(args.r_max))
     neigh = build_neigbouring_matrix(neigh_range=neigh_range)
 
     def compute_pcf(ds):
@@ -170,7 +173,7 @@ if __name__ == "__main__":
     sim_path = (
         r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\uniform"
     )
-    args = ["prog", sim_path]
+    args = ["prog", sim_path, "5"]
 
     with patch.object(sys, "argv", args):
         main()
