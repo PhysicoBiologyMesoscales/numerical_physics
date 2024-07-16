@@ -29,15 +29,11 @@ def main():
     args = parse_args()
     sim_path = args.sim_folder_path
     # Load full sim data and parameters
-    full_data = pd.read_csv(
-        join(sim_path, "Data.csv"), index_col=["p_id", "t"]
-    ).to_xarray()
-    with open(join(sim_path, "parms.json")) as json_file:
-        parm_dic = json.load(json_file)
-    asp = parm_dic["aspect_ratio"]
-    Nt = full_data.sizes["t"]
-    N = full_data.sizes["p_id"]
-    l = np.sqrt(N * np.pi / asp / parm_dic["phi"])
+    full_data = xr.open_dataset(join(sim_path, "data.nc"))
+    asp = full_data.asp
+    N = full_data.N
+    phi = full_data.phi
+    l = np.sqrt(N * np.pi / asp / phi)
     L = asp * l
     # Load discretization parameters; y discretization is fixed by Nx and aspect ratio to get square tiles
     Nx = args.nx
@@ -145,7 +141,7 @@ if __name__ == "__main__":
     from unittest.mock import patch
 
     sim_path = (
-        r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\_temp"
+        r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\test"
     )
     args = ["prog", sim_path, "20", "20"]
     with patch.object(sys, "argv", args):

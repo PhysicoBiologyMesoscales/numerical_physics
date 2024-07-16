@@ -24,15 +24,11 @@ def parse_args():
 def main():
     args = parse_args()
     sim_path = args.sim_folder_path
-    sim_data = pd.read_csv(
-        join(sim_path, "Data.csv"), index_col=["p_id", "t"]
-    ).to_xarray()
+    sim_data = xr.open_dataset(join(sim_path, "data.nc"))
 
-    with open(join(sim_path, "parms.json")) as json_file:
-        parms = json.load(json_file)
-    asp = parms["aspect_ratio"]
-    N = parms["N"]
-    l = np.sqrt(N * np.pi / asp / parms["phi"])
+    asp = sim_data.asp
+    N = sim_data.N
+    l = np.sqrt(N * np.pi / asp / sim_data.phi)
     L = asp * l
 
     Nx = int(l / 2)
@@ -159,10 +155,10 @@ def main():
                 theta=np.linspace(0, 2 * np.pi, Nth),
             ),
         )
-
         return pcf_ds
 
-    pcf_ds = sim_data.groupby("t").apply(compute_pcf)
+    pcf_ds = sim_data.groupby("t", squeeze=False).apply(compute_pcf)
+    pcf_ds = pcf_ds.assign_attrs(sim_data.attrs)
     pcf_ds.to_netcdf(join(sim_path, "pcf.nc"))
 
 
@@ -171,7 +167,7 @@ if __name__ == "__main__":
     from unittest.mock import patch
 
     sim_path = (
-        r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\uniform"
+        r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\test"
     )
     args = ["prog", sim_path, "5"]
 

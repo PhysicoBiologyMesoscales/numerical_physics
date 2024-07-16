@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import scipy.sparse as sp
-from os import makedirs
+from os import makedirs, remove
 from os.path import join
 import tkinter as tk
 from tkinter import messagebox
@@ -27,6 +27,19 @@ def parse_args():
     parser.add_argument("k", help="Polarity-Velocity alignment strength", type=float)
     parser.add_argument("h", help="Nematic field intensity", type=float)
     parser.add_argument("t_max", help="Max simulation time", type=float)
+    parser.add_argument("--dt", help="Base Time Step", type=float, default=5e-2)
+    parser.add_argument(
+        "--dt_save",
+        help="Time interval between data saves",
+        type=float,
+        default=1.0,
+    )
+    parser.add_argument("--save_modulo", help="")
+    parser.add_argument(
+        "--save_data",
+        help="Save simulation data in .csv file",
+        action="store_true",
+    )
     parser.add_argument(
         "--create_images",
         help="Create plots of the simulation",
@@ -38,12 +51,9 @@ def parse_args():
         action="store_true",
     )
     parser.add_argument(
-        "--save_data",
-        help="Save simulation data in .csv file",
+        "--save_images",
+        help="Save simulation images to disk",
         action="store_true",
-    )
-    parser.add_argument(
-        "--save_images", help="Save simulation images to disk", action="store_true"
     )
     parser.add_argument("--save_path", help="Path to save images", type=str)
     args = parser.parse_args()
@@ -51,10 +61,13 @@ def parse_args():
 
 
 def main():
-    matplotlib.use("Agg")
-    plt.ioff()
 
     parms = parse_args()
+
+    if not parms.plot_images:
+        # Turn matplotlib window off
+        matplotlib.use("Agg")
+        plt.ioff()
 
     # Packing fraction and particle number
     phi = parms.phi
@@ -62,7 +75,7 @@ def main():
     # Frame aspect ratio
     aspectRatio = parms.ar
     # Frame width
-    l = np.sqrt(N * np.pi / aspectRatio / phi)
+    l = np.sqrt(parms.N_max * np.pi / aspectRatio)
     L = aspectRatio * l
     # Physical parameters
     v0 = parms.v0  # Propulsion force
@@ -70,9 +83,16 @@ def main():
     k = parms.k  # Polarity-velocity coupling
     h = parms.h  # Nematic field intensity
 
-    dt = 5e-2 / v0
+    dt_max = (
+        5e-2 / v0
+    )  # Max dt depends on v0 to avoid overshooting in particle collision
+    dt = min(parms.dt, dt_max)
+    # Compute frame interval between save points and make sure dt divides dt_save
+    plot_every = int(np.ceil(parms.dt_save / parms.dt))
+    dt = parms.dt_save / plot_every
+
     t_max = parms.t_max
-    Nt = int(t_max / dt)
+    t_arr = np.arange(0, t_max, dt)
 
     # Display parameters
     displayHeight = 7.0
@@ -148,49 +168,8 @@ def main():
         Fy = np.array(Fij.multiply(yij).sum(axis=0)).flatten()
         return Fx, Fy
 
-    def coarsegrain_field(r, theta, field, Nx_cg, Ny_cg, Nth):
-        if field.ndim == 1:
-            _field = np.array([field]).T
-        else:
-            _field = field
-        wx_cg = l / Nx_cg
-        wy_cg = L / Ny_cg
-        wth = 2 * np.pi / Nth
-        # We compute forces in (x, y, theta) space
-        r_th = np.concatenate([r, np.array([theta % (2 * np.pi)]).T], axis=-1)
-        # Build matrix and 1D encoding in (x, y, theta) space
-        Cijk = (r_th // np.array([wx_cg, wy_cg, wth])).astype(int)
-        C1d_cg = np.ravel_multi_index(Cijk.T, (Nx_cg, Ny_cg, Nth), order="C")
-        C = sp.eye(Nx_cg * Ny_cg * Nth, format="csr")[C1d_cg]
-        count = C.T.sum(axis=1)
-        field_cg = C.T @ _field / np.where(count == 0, 1.0, count)
-        return field_cg
-
-    def linear_inverse_sampling(x, left, right, a):
-        """Given a x value uniformly sampled in [0,1], returns a value sampled with linear pdf in [left, right]
-        a is the value of the pdf at the left bound, normalized to be in [0,2]
-        """
-        if left >= right:
-            raise (ValueError("Left bound should be inferior to right bound"))
-        if a < 0 or a > 2:
-            raise (ValueError("Probability can't be negative; please change a"))
-        if a == 1:
-            return left + (right - left) * x
-        return left + (right - left) * a / 2 / (1 - a) * (
-            np.sqrt(1 + 4 * x * (1 - a) / a**2) - 1
-        )
-
-    def linear_sample(left, right, a, size):
-        return linear_inverse_sampling(np.random.uniform(size=size), left, right, a)
-
     # Initiate fields
     r = np.random.uniform([0, 0], [l, L], size=(N, 2))
-    # x = linear_sample(0, l, 1.3, N)
-    # x = np.random.uniform(0, l, size=N)
-    # x = np.random.triangular(0, l / 2, l, size=N)
-    # y = np.random.uniform(0, L, size=N)
-    # y = np.random.triangular(0, L / 2, L, size=N)
-    # r = np.stack([x, y], axis=-1)
     theta = np.random.uniform(-np.pi, np.pi, size=N)
 
     save_path = parms.save_path
@@ -213,50 +192,36 @@ def main():
             makedirs(save_path)
             if parms.save_images:
                 makedirs(join(save_path, "Images"))
-        with open(join(save_path, "parms.json"), "w") as jsonFile:
-            json.dump(
-                {
-                    "aspect_ratio": aspectRatio,
-                    "N": N,
-                    "phi": phi,
-                    "v0": v0,
-                    "kc": kc,
-                    "k": k,
-                    "h": h,
-                    "Nt": Nt,
-                    "l": l,
-                    "L": L,
-                },
-                jsonFile,
-            )
 
-    for i in range(Nt):
-        # Compute forces
+    for i, t in enumerate(t_arr):
+        ## Compute forces
         Fx, Fy = compute_forces(r)
-        v = v0 * np.stack(
-            [
-                np.cos(theta),
-                np.sin(theta),
-            ],
-            axis=-1,
-        )
         F = v0 * np.stack([kc * Fx, kc * Fy], axis=-1)
-        v += F
+        # Velocity = v0*(e + F)
+        v = v0 * (
+            np.stack(
+                [
+                    np.cos(theta),
+                    np.sin(theta),
+                ],
+                axis=-1,
+            )
+            + F
+        )
+        # Gaussian white noise
         xi = np.sqrt(2 * dt) * np.random.randn(N)
+        ## Update position
+        r += dt * v
+        # Periodic BC
+        r %= np.array([l, L])
+        ## Compute angular dynamics
         e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
         theta += (
             dt * (-h * np.sin(2 * theta) + k * np.einsum("ij, ij->i", F, e_perp)) + xi
         )
         theta %= 2 * np.pi
-        r += dt * v
-        r %= np.array([l, L])
 
-        Nx_cg, Ny_cg, Nth = Nx // 4, Ny // 4, 50
-        F_cg = coarsegrain_field(r, theta, F, Nx_cg, Ny_cg, Nth).reshape(
-            (Nx // 4, Ny // 4, 50, 2)
-        )
-
-        if i % int(20 * v0) == 1:
+        if i % plot_every == 0:
             if parms.create_images:
                 ax_.cla()
                 ax_.set_xlim(0, l)
@@ -271,19 +236,21 @@ def main():
                 )
                 ax_theta.cla()
                 ax_theta.imshow(
-                    F_cg[:, :, 0, 0].T,
-                    vmin=-v0 * kc / 2,
-                    vmax=v0 * kc / 2,
+                    r[:, 0],
+                    r[:, 1],
+                    s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
+                    c=theta,
+                    vmin=0,
+                    vmax=2 * np.pi,
                 )
                 if parms.plot_images:
-                    print("plotting image !")
                     fig.show()
                     plt.pause(0.1)
                 if parms.save_images:
-                    fig.savefig(join(save_path, "Images", f"{i//int(20 * v0)}.png"))
+                    fig.savefig(join(save_path, "Images", f"{i//plot_every}.png"))
             if parms.save_data:
                 data = {
-                    "t": dt * i * np.ones(N),
+                    "t": t,
                     "theta": theta,
                     "x": r[:, 0],
                     "y": r[:, 1],
@@ -291,12 +258,75 @@ def main():
                     "Fy": F[:, 1],
                 }
                 header = False
-                if i // int(20 * v0) == 0:
+                if i // plot_every == 0:
                     header = True
                 df = pd.DataFrame(data, index=np.arange(N))
                 df.index.set_names("p_id", inplace=True)
-                df.to_csv(join(save_path, "Data.csv"), mode="a", header=header)
+                df.to_csv(join(save_path, "_temp_data.csv"), mode="a", header=header)
+
+    if parms.save_data:
+        ds = (
+            pd.read_csv(join(save_path, "_temp_data.csv"), index_col=["p_id", "t"])
+            .to_xarray()
+            .assign_attrs(
+                {
+                    "asp": aspectRatio,
+                    "N": N,
+                    "phi": phi,
+                    "v0": v0,
+                    "kc": kc,
+                    "k": k,
+                    "h": h,
+                    "l": l,
+                    "L": L,
+                    "t_max": t_max,
+                    "dt": dt,
+                }
+            )
+        )
+        ds.to_netcdf(join(save_path, "data.nc"))
+        remove(join(save_path, "_temp_data.csv"))
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    from unittest.mock import patch
+
+    # Define sim parameters
+    aspect_ratio = 1.5
+    N = 40000
+    phi = 1.0
+    kc = 3.0
+    h = 0.0
+    dt = 5e-3
+    dt_save = 5e-2
+    t_max = 1.0
+    v0 = 3
+    k = 5
+    save_path = join(
+        r"C:\Users\nolan\Documents\PhD\Simulations\\",
+        "Data",
+        "Compute_forces",
+        "Batch",
+        "test",
+    )
+    args = [
+        "prog",
+        str(aspect_ratio),
+        str(N),
+        str(phi),
+        str(v0),
+        str(kc),
+        str(k),
+        str(h),
+        str(t_max),
+        "--dt",
+        str(dt),
+        "--dt_save",
+        str(dt_save),
+        "--save_data",
+        "--save_path",
+        save_path,
+    ]
+    with patch.object(sys, "argv", args):
+        main()
