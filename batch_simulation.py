@@ -281,6 +281,7 @@ def main():
                     "L": L,
                     "t_max": t_max,
                     "dt": dt,
+                    "dt_save": parms.dt_save,
                 }
             )
         )
