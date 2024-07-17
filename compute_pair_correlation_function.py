@@ -79,9 +79,9 @@ def main():
         cell_data = (ds.y // dy * Nx + ds.x // dx).astype(int).data.flatten()
         # Compute coarse-graining matrix; Cij = 1 if particle j is in cell i, 0 otherwise
         C = sp.eye(Nx * Ny, format="csr")[cell_data]
-
+        # inRange[i,j]=1 if cells i,j are in neighbouring cells, 0 otherwise
         inRange = C.dot(neigh).dot(C.T)
-
+        # Get positions and orientations for interacting cells
         x_ = inRange.multiply(ds.x)
         y_ = inRange.multiply(ds.y)
         th_ = inRange.multiply(ds.theta)
@@ -106,44 +106,43 @@ def main():
         y_bound_minus = (yij.data < -L / 2).astype(int)
         yij.data += L * y_bound_minus
 
+        # Compute orientation angle in [0, 2*pi] range
         thij = th_ - th_.T
         thij.data = np.where(thij.data < 0, 2 * np.pi + thij.data, thij.data)
 
-        # particle-particle distance for interacting particles
+        # Particle-particle distance for interacting particles
         dij = (xij.power(2) + yij.power(2)).power(0.5)
 
         r_vec = np.stack([xij.data / dij.data, yij.data / dij.data], axis=-1)
         e_vec = np.stack([np.cos(th_.data), np.sin(th_.data)], axis=-1)
 
+        # Compute azimuthal angle between cell polarity and particle-particle vector
         phi_ij = xij.copy()
         phi_ij.data = np.arccos(np.einsum("ij,ij->i", r_vec, e_vec)) * np.sign(
             np.cross(e_vec, r_vec)
         )
         phi_ij.data = np.where(phi_ij.data < 0, 2 * np.pi + phi_ij.data, phi_ij.data)
 
+        ## Compute pair-correlation function
+
+        # Binning dimensions
         Nr, Nphi, Nth = 50, 20, 15
         rmax = neigh_range
         dr2, dth, dphi = rmax**2 / Nr, 2 * np.pi / Nth, 2 * np.pi / Nphi
 
-        cell_r_ij = dij.copy()
-        cell_r_ij.data = (dij.data**2 // dr2).astype(int)
-
-        cell_phi_ij = dij.copy()
-        cell_phi_ij.data = (phi_ij.data // dphi).astype(int)
-
-        cell_th_ij = dij.copy()
-        cell_th_ij.data = (thij.data // dth).astype(int)
-
-        cell_ij = dij.copy()
-        cell_ij.data = (
-            cell_r_ij.data * Nphi * Nth + cell_phi_ij.data * Nth + cell_th_ij.data
+        # Sparse matrix containing bin index for particle pair (i,j)
+        bin_ij = dij.copy()
+        bin_ij.data = (
+            (dij.data**2 // dr2).astype(int) * Nphi * Nth
+            + (phi_ij.data // dphi).astype(int) * Nth
+            + (thij.data // dth).astype(int)
         ) + 1
-        cell_ij.data = np.where(cell_ij.data > Nr * Nphi * Nth, 0, cell_ij.data)
-        cell_ij.eliminate_zeros()
-        cell_ij.data -= 1
+        bin_ij.data = np.where(bin_ij.data > Nr * Nphi * Nth, 0, bin_ij.data)
+        bin_ij.eliminate_zeros()
+        bin_ij.data -= 1
 
         pcf = np.zeros((Nr, Nphi, Nth))
-        idx_1d, counts = np.unique(cell_ij.data, return_counts=True)
+        idx_1d, counts = np.unique(bin_ij.data, return_counts=True)
         idx = np.unravel_index(idx_1d, shape=(Nr, Nphi, Nth))
         pcf[idx] = counts
 
