@@ -10,7 +10,7 @@ from shutil import rmtree
 import pandas as pd
 import argparse
 import matplotlib
-import json
+from tqdm import tqdm
 
 
 def parse_args():
@@ -34,27 +34,6 @@ def parse_args():
         type=float,
         default=1.0,
     )
-    parser.add_argument("--save_modulo", help="")
-    parser.add_argument(
-        "--save_data",
-        help="Save simulation data in .csv file",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--create_images",
-        help="Create plots of the simulation",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--plot_images",
-        help="Plot simulation results in plt window",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--save_images",
-        help="Save simulation images to disk",
-        action="store_true",
-    )
     parser.add_argument("--save_path", help="Path to save images", type=str)
     args = parser.parse_args()
     return args
@@ -63,11 +42,6 @@ def parse_args():
 def main():
 
     parms = parse_args()
-
-    if not parms.plot_images:
-        # Turn matplotlib window off
-        matplotlib.use("Agg")
-        plt.ioff()
 
     # Packing fraction and particle number
     phi = parms.phi
@@ -88,8 +62,8 @@ def main():
     )  # Max dt depends on v0 to avoid overshooting in particle collision
     dt = min(parms.dt, dt_max)
     # Compute frame interval between save points and make sure dt divides dt_save
-    plot_every = int(np.ceil(parms.dt_save / parms.dt))
-    dt = parms.dt_save / plot_every
+    interval_btw_saves = int(np.ceil(parms.dt_save / dt))
+    dt = parms.dt_save / interval_btw_saves
 
     t_max = parms.t_max
     t_arr = np.arange(0, t_max, dt)
@@ -174,26 +148,21 @@ def main():
 
     save_path = parms.save_path
 
-    if parms.save_data:
-        try:
-            makedirs(save_path)
-            if parms.save_images:
-                makedirs(join(save_path, "Images"))
-        except FileExistsError:
-            root = tk.Tk()
-            root.withdraw()  # Hide the main window
-            # Display a yes/no messagebox
-            result = messagebox.askyesno(
-                "Folder already exists", "Folder already exists; overwrite ?"
-            )
-            if not result:
-                raise (FileExistsError("Folder already exists; not overwriting"))
-            rmtree(save_path)
-            makedirs(save_path)
-            if parms.save_images:
-                makedirs(join(save_path, "Images"))
+    try:
+        makedirs(save_path)
+    except FileExistsError:
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+        # Display a yes/no messagebox
+        result = messagebox.askyesno(
+            "Folder already exists", "Folder already exists; overwrite ?"
+        )
+        if not result:
+            raise (FileExistsError("Folder already exists; not overwriting"))
+        rmtree(save_path)
+        makedirs(save_path)
 
-    for i, t in enumerate(t_arr):
+    for i, t in enumerate(tqdm(t_arr)):
         ## Compute forces
         Fx, Fy = compute_forces(r)
         F = v0 * np.stack([kc * Fx, kc * Fy], axis=-1)
@@ -210,83 +179,58 @@ def main():
         )
         # Gaussian white noise
         xi = np.sqrt(2 * dt) * np.random.randn(N)
+        ## Compute angular dynamics
+        e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
+
+        ## Save data before position/orientation update
+        if i % interval_btw_saves == 0:
+            data = {
+                "t": t,
+                "theta": theta,
+                "x": r[:, 0],
+                "y": r[:, 1],
+                "Fx": F[:, 0],
+                "Fy": F[:, 1],
+            }
+            header = False
+            if i // interval_btw_saves == 0:
+                header = True
+            df = pd.DataFrame(data, index=np.arange(N))
+            df.index.set_names("p_id", inplace=True)
+            df.to_csv(join(save_path, "_temp_data.csv"), mode="a", header=header)
+
         ## Update position
         r += dt * v
         # Periodic BC
         r %= np.array([l, L])
-        ## Compute angular dynamics
-        e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
+        ## Update orientation
         theta += (
             dt * (-h * np.sin(2 * theta) + k * np.einsum("ij, ij->i", F, e_perp)) + xi
         )
         theta %= 2 * np.pi
 
-        if i % plot_every == 0:
-            if parms.create_images:
-                ax_.cla()
-                ax_.set_xlim(0, l)
-                ax_.set_ylim(0, L)
-                ax_.scatter(
-                    r[:, 0],
-                    r[:, 1],
-                    s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
-                    c=np.arange(N),
-                    vmin=0,
-                    vmax=N,
-                )
-                ax_theta.cla()
-                ax_theta.imshow(
-                    r[:, 0],
-                    r[:, 1],
-                    s=np.pi * 1.25 * (72.0 / L * displayHeight) ** 2,
-                    c=theta,
-                    vmin=0,
-                    vmax=2 * np.pi,
-                )
-                if parms.plot_images:
-                    fig.show()
-                    plt.pause(0.1)
-                if parms.save_images:
-                    fig.savefig(join(save_path, "Images", f"{i//plot_every}.png"))
-            if parms.save_data:
-                data = {
-                    "t": t,
-                    "theta": theta,
-                    "x": r[:, 0],
-                    "y": r[:, 1],
-                    "Fx": F[:, 0],
-                    "Fy": F[:, 1],
-                }
-                header = False
-                if i // plot_every == 0:
-                    header = True
-                df = pd.DataFrame(data, index=np.arange(N))
-                df.index.set_names("p_id", inplace=True)
-                df.to_csv(join(save_path, "_temp_data.csv"), mode="a", header=header)
-
-    if parms.save_data:
-        ds = (
-            pd.read_csv(join(save_path, "_temp_data.csv"), index_col=["p_id", "t"])
-            .to_xarray()
-            .assign_attrs(
-                {
-                    "asp": aspectRatio,
-                    "N": N,
-                    "phi": phi,
-                    "v0": v0,
-                    "kc": kc,
-                    "k": k,
-                    "h": h,
-                    "l": l,
-                    "L": L,
-                    "t_max": t_max,
-                    "dt": dt,
-                    "dt_save": parms.dt_save,
-                }
-            )
+    ds = (
+        pd.read_csv(join(save_path, "_temp_data.csv"), index_col=["p_id", "t"])
+        .to_xarray()
+        .assign_attrs(
+            {
+                "asp": aspectRatio,
+                "N": N,
+                "phi": phi,
+                "v0": v0,
+                "kc": kc,
+                "k": k,
+                "h": h,
+                "l": l,
+                "L": L,
+                "t_max": t_max,
+                "dt": dt,
+                "dt_save": parms.dt_save,
+            }
         )
-        ds.to_netcdf(join(save_path, "data.nc"))
-        remove(join(save_path, "_temp_data.csv"))
+    )
+    ds.to_netcdf(join(save_path, "data.nc"))
+    remove(join(save_path, "_temp_data.csv"))
 
 
 if __name__ == "__main__":
@@ -302,14 +246,14 @@ if __name__ == "__main__":
     dt = 5e-3
     dt_save = 5e-2
     t_max = 1.0
-    v0 = 3
-    k = 5
+    v0 = 3.0
+    k = 10.0
     save_path = join(
         r"C:\Users\nolan\Documents\PhD\Simulations\\",
         "Data",
         "Compute_forces",
         "Batch",
-        "test",
+        f"ar={aspect_ratio}_N={N}_phi={phi}_v0={v0}_kc={kc}_k={k}_h={h}_tmax={t_max}",
     )
     args = [
         "prog",
@@ -325,7 +269,6 @@ if __name__ == "__main__":
         str(dt),
         "--dt_save",
         str(dt_save),
-        "--save_data",
         "--save_path",
         save_path,
     ]
