@@ -2,10 +2,11 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import scipy.sparse as sp
-import json
 import argparse
 
 from os.path import join
+
+from tqdm import tqdm
 
 
 def parse_args():
@@ -17,6 +18,19 @@ def parse_args():
     )
     parser.add_argument(
         "r_max", help="Maximum radius to compute pair-correlation function", type=float
+    )
+    parser.add_argument(
+        "Nr", help="Number of discretization points on the radial dimension", type=int
+    )
+    parser.add_argument(
+        "Nphi",
+        help="Number of discretization points on the orthoradial dimension",
+        type=int,
+    )
+    parser.add_argument(
+        "Nth",
+        help="Number of discretization points for polarity difference between particles",
+        type=int,
     )
     return parser.parse_args()
 
@@ -35,6 +49,13 @@ def main():
     Ny = int(L / 2)
     dx = l / Nx
     dy = L / Ny
+
+    # Binning dimensions
+    Nr, Nphi, Nth = args.Nr, args.Nphi, args.Nth
+    rmax = args.r_max
+    # Load only cells which are in the given range of interaction
+    neigh_range = int(np.ceil((rmax + 1) / 2))
+    dr2, dphi, dth = rmax**2 / Nr, 2 * np.pi / Nphi, 2 * np.pi / Nth
 
     def build_neigbouring_matrix(neigh_range: int = 1):
         """
@@ -72,7 +93,6 @@ def main():
         neigh_y = sp.dia_matrix((datay, offsetsy), shape=(Ny, Ny))
         return sp.kron(neigh_y, neigh_x)
 
-    neigh_range = int(np.ceil(args.r_max))
     neigh = build_neigbouring_matrix(neigh_range=neigh_range)
 
     def compute_pcf(ds):
@@ -106,7 +126,7 @@ def main():
         y_bound_minus = (yij.data < -L / 2).astype(int)
         yij.data += L * y_bound_minus
 
-        # Compute orientation angle in [0, 2*pi] range
+        # Compute orientation difference in [0, 2*pi] range
         thij = th_ - th_.T
         thij.data = np.where(thij.data < 0, 2 * np.pi + thij.data, thij.data)
 
@@ -114,7 +134,10 @@ def main():
         dij = (xij.power(2) + yij.power(2)).power(0.5)
 
         r_vec = np.stack([xij.data / dij.data, yij.data / dij.data], axis=-1)
-        e_vec = np.stack([np.cos(th_.data), np.sin(th_.data)], axis=-1)
+        e_vec = np.stack(
+            [np.cos(sp.csr_matrix(th_.T).data), np.sin(sp.csr_matrix(th_.T).data)],
+            axis=-1,
+        )
 
         # Compute azimuthal angle between cell polarity and particle-particle vector
         phi_ij = xij.copy()
@@ -124,11 +147,6 @@ def main():
         phi_ij.data = np.where(phi_ij.data < 0, 2 * np.pi + phi_ij.data, phi_ij.data)
 
         ## Compute pair-correlation function
-
-        # Binning dimensions
-        Nr, Nphi, Nth = 50, 20, 15
-        rmax = neigh_range
-        dr2, dth, dphi = rmax**2 / Nr, 2 * np.pi / Nth, 2 * np.pi / Nphi
 
         # Sparse matrix containing bin index for particle pair (i,j)
         bin_ij = dij.copy()
@@ -149,15 +167,17 @@ def main():
         pcf_ds = xr.Dataset(
             data_vars={"g": (["r", "phi", "theta"], pcf)},
             coords=dict(
-                r=np.sqrt(np.linspace(0, rmax**2, Nr)),
-                phi=np.linspace(0, 2 * np.pi, Nphi),
-                theta=np.linspace(0, 2 * np.pi, Nth),
+                r=np.sqrt(np.linspace(0, rmax**2, Nr, endpoint=False)),
+                phi=np.linspace(0, 2 * np.pi, Nphi, endpoint=False),
+                theta=np.linspace(0, 2 * np.pi, Nth, endpoint=False),
             ),
         )
         return pcf_ds
 
     pcf_ds = sim_data.groupby("t", squeeze=False).apply(compute_pcf)
-    pcf_ds = pcf_ds.assign_attrs(sim_data.attrs)
+    pcf_ds = pcf_ds.assign_attrs(
+        {"dr2": dr2, "dphi": dphi, "dth": dth, **sim_data.attrs}
+    )
     pcf_ds.to_netcdf(join(sim_path, "pcf.nc"))
 
 
@@ -165,10 +185,8 @@ if __name__ == "__main__":
     import sys
     from unittest.mock import patch
 
-    sim_path = (
-        r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\test"
-    )
-    args = ["prog", sim_path, "5"]
+    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\ar=1.5_N=40000_phi=1.0_v0=3.0_kc=3.0_k=10.0_h=0.0_tmax=1.0"
+    args = ["prog", sim_path, "2"]
 
     with patch.object(sys, "argv", args):
         main()
