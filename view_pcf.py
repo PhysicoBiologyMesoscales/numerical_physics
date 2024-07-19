@@ -22,9 +22,6 @@ def main():
     sim_path = parms.sim_folder_path
     pcf_ds = xr.open_dataset(join(sim_path, "pcf.nc"))
 
-    # Divide by proba to find particle with given orientation
-    pcf_ds = pcf_ds.assign(g2=pcf_ds.g / pcf_ds.g.sum(dim=["r", "phi"]))
-
     t_avg_checkbox = pn.widgets.Checkbox(name="Time Average")
     th_avg_checkbox = pn.widgets.Checkbox(name="Theta Average")
     list_t = list(pcf_ds.t.data)
@@ -45,13 +42,14 @@ def main():
         if th_avg:
             avg_dims.append("theta")
             _sel.pop("theta")
-        data = pcf_ds.mean(dim=avg_dims).sel(**_sel)
-        plot = hv.HeatMap((data["phi"], data["r"], data["g2"])).opts(
+        mean_data = pcf_ds.mean(dim=avg_dims)
+        data = mean_data.sel(**_sel)
+        plot = hv.HeatMap((data["phi"], data["r"], data["g"])).opts(
             cmap=cmap,
             width=400,
             height=400,
             yticks=list(np.round(np.linspace(0, float(pcf_ds.r.max()), 5), decimals=1)),
-            clim=(float(pcf_ds.g2.min()), float(pcf_ds.g2.max())),
+            clim=(float(mean_data.g.min()), float(mean_data.g.max())),
             radial=True,
             radius_inner=0,
             tools=["hover"],

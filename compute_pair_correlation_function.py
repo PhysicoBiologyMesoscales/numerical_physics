@@ -175,6 +175,7 @@ def main():
         return pcf_ds
 
     pcf_ds = sim_data.groupby("t", squeeze=False).apply(compute_pcf)
+    pcf_ds = pcf_ds.assign(g=pcf_ds.g / pcf_ds.g.mean(dim=["r", "phi"]))
     pcf_ds = pcf_ds.assign_attrs(
         {"dr2": dr2, "dphi": dphi, "dth": dth, **sim_data.attrs}
     )
@@ -186,7 +187,7 @@ if __name__ == "__main__":
     from unittest.mock import patch
 
     sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\ar=1.5_N=40000_phi=1.0_v0=3.0_kc=3.0_k=10.0_h=0.0_tmax=1.0"
-    args = ["prog", sim_path, "2"]
+    args = ["prog", sim_path, "2", "50", "31", "31"]
 
     with patch.object(sys, "argv", args):
         main()
