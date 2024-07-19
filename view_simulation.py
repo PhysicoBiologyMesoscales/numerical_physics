@@ -40,7 +40,7 @@ def main():
         options=["random", "vx", "vy", "theta", "Fx", "Fy"],
     )
     select_cmap = pn.widgets.Select(
-        name="Color Map", value="viridis", options=["viridis", "jet", "blues", "Reds"]
+        name="Color Map", value="bwr", options=["viridis", "jet", "blues", "bwr"]
     )
 
     rand_color = np.arange(N)
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     from unittest.mock import patch
 
     pn.extension()
-    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\ar=1.5_N=100000_phi=0.4_v0=3_kc=3.0_k=10_h=0.0"
+    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\ar=1.5_N=40000_phi=1.0_v0=3.0_kc=3.0_k=10.0_h=0.0_tmax=1.0"
     args = ["prog", sim_path]
     with patch.object(sys, "argv", args):
         sim_data, row = main()
