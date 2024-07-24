@@ -1,12 +1,13 @@
 import numpy as np
 import scipy.sparse as sp
-from os import makedirs, remove
-from os.path import join
 import tkinter as tk
-from tkinter import messagebox
-from shutil import rmtree
 import pandas as pd
 import argparse
+
+from os import makedirs, remove
+from os.path import join
+from tkinter import messagebox
+from shutil import rmtree
 from tqdm import tqdm
 
 

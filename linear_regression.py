@@ -1,7 +1,6 @@
 import xarray as xr
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from typing import Iterable
 from numpy.typing import NDArray
 
 

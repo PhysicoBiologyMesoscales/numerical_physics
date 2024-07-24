@@ -1,7 +1,6 @@
 import numpy as np
 import json
 import argparse
-import pandas as pd
 import xarray as xr
 import scipy.sparse as sp
 

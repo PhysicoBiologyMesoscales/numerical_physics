@@ -6,8 +6,6 @@ import argparse
 
 from os.path import join
 
-from tqdm import tqdm
-
 
 def parse_args():
     parser = argparse.ArgumentParser(

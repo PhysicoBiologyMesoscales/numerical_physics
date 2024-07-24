@@ -4,7 +4,6 @@ import argparse
 import json
 
 from os.path import join
-from itertools import product
 
 
 def parse_args():
