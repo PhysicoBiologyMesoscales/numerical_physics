@@ -1,6 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import scipy.sparse as sp
 from os import makedirs, remove
 from os.path import join
@@ -9,7 +7,6 @@ from tkinter import messagebox
 from shutil import rmtree
 import pandas as pd
 import argparse
-import matplotlib
 from tqdm import tqdm
 
 
@@ -67,19 +64,6 @@ def main():
 
     t_max = parms.t_max
     t_arr = np.arange(0, t_max, dt)
-
-    # Display parameters
-    displayHeight = 7.0
-    fig = plt.figure(figsize=(displayHeight / aspectRatio * 2, displayHeight))
-    ax_ = fig.add_axes((0, 0, 1 / 2, 1))
-    ax_theta = fig.add_axes((1 / 2, 0, 1 / 2, 1))
-    for ax in [ax_, ax_theta]:
-        # Hide X and Y axes label marks
-        ax.xaxis.set_tick_params(labelbottom=False)
-        ax.yaxis.set_tick_params(labelleft=False)
-        # Hide X and Y axes tick marks
-        ax.set_xticks([])
-        ax.set_yticks([])
 
     # Cells lists number
     Nx = int(l / 2)
