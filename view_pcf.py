@@ -24,16 +24,19 @@ def main():
 
     t_avg_checkbox = pn.widgets.Checkbox(name="Time Average")
     th_avg_checkbox = pn.widgets.Checkbox(name="Theta Average")
+
     list_t = list(pcf_ds.t.data)
     t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
     list_th = list(pcf_ds.theta.data)
     th_slider = pn.widgets.DiscreteSlider(name="theta", options=list_th)
+    list_r = list(pcf_ds.r.data)
+    rmax_slider = pn.widgets.DiscreteSlider(name="rmax", options=list_r)
     select_cmap = pn.widgets.Select(
         name="Color Map", value="viridis", options=["viridis", "jet", "bwr"]
     )
 
     # TODO Fix xticks !
-    def plot_data(t_avg, th_avg, t, th, cmap):
+    def plot_data(t_avg, th_avg, t, th, rmax, cmap):
         _sel = {"t": t, "theta": th}
         avg_dims = []
         if t_avg:
@@ -43,7 +46,7 @@ def main():
             avg_dims.append("theta")
             _sel.pop("theta")
         mean_data = pcf_ds.mean(dim=avg_dims)
-        data = mean_data.sel(**_sel)
+        data = mean_data.sel(**_sel).sel(r=slice(0, rmax))
         plot = hv.HeatMap((data["phi"], data["r"], data["g"])).opts(
             cmap=cmap,
             width=400,
@@ -63,6 +66,7 @@ def main():
             th_avg=th_avg_checkbox,
             t=t_slider,
             th=th_slider,
+            rmax=rmax_slider,
             cmap=select_cmap,
         )
     )
@@ -83,6 +87,7 @@ def main():
                 th_avg_checkbox,
                 t_slider,
                 th_slider,
+                rmax_slider,
                 select_cmap,
             )
         ),
