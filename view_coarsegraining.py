@@ -15,12 +15,21 @@ def parse_args():
     parser.add_argument(
         "sim_folder_path", help="Path to folder containing simulation data", type=str
     )
+    parser.add_argument(
+        "-rd",
+        "--rho_degree",
+        help="Degree of polynomial in rho for linear regression",
+        type=int,
+        default=1,
+    )
     return parser.parse_args()
 
 
 def main():
+    # Load arguments
     parms = parse_args()
     sim_path = parms.sim_folder_path
+    rd = parms.rho_degree
     cg_ds = xr.open_dataset(join(sim_path, "cg_data.nc"))
     asp = cg_ds.attrs["L"] / cg_ds.attrs["l"]
     cg_ds = cg_ds.assign(
@@ -56,30 +65,12 @@ def main():
         ),
     )
 
-    cg_ds.assign(Fx=cg_ds.Fx / cg_ds.psi, Fy=cg_ds.Fy / cg_ds.psi)
-
     # Linear regression fit of the forces with fields (grad_rho, p)
     lr = LinearRegression_xr(
-        target_field="F", training_fields=["grad_rho", "p", "e"], poly_degree=2
+        target_field="F", training_fields=["grad_rho", "p", "e"], poly_degree=rd
     )
     lr.fit(cg_ds)
     cg_ds = lr.predict_on_dataset(cg_ds)
-
-    def split_by_attr(ds, attr_name):
-        fields = {}
-        for var_name, variable in ds.items():
-            attr_value = variable.attrs.get(attr_name)
-            if not attr_value:
-                raise (
-                    ValueError(
-                        f"Variable {var_name} doesn't have attribute {attr_name}"
-                    )
-                )
-            if not attr_value in fields.keys():
-                fields[attr_value] = [variable]
-            else:
-                fields[attr_value].append(variable)
-        return fields
 
     def list_fields(ds: xr.Dataset, **kwargs):
         list_fields = []
@@ -195,9 +186,8 @@ if __name__ == "__main__":
     from unittest.mock import patch
 
     pn.extension()
-    sim_path = (
-        r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\_temp"
-    )
+    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\ar=1.5_N=40000_phi=1.0_v0=3.0_kc=3.0_k=10.0_h=0.0_tmax=1.0"
+
     args = ["prog", sim_path]
     with patch.object(sys, "argv", args):
         cg_ds, row, lr = main()
