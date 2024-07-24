@@ -120,6 +120,23 @@ def main():
             / rho_wo_zero,
             {"name": "p", "average": 1, "type": "vector", "dir": "y"},
         ),
+        Qx=(
+            ["t", "y", "x"],
+            (cg_data.psi * np.cos(2 * cg_data.theta)).sum(dim="theta").data
+            / 2
+            * dth
+            / rho_wo_zero,
+            {"name": "Q", "average": 1, "type": "tensor", "dir": "x"},
+        ),
+        Qy=(
+            ["t", "y", "x"],
+            (cg_data.psi * np.sin(2 * cg_data.theta)).sum(dim="theta").data
+            / 2
+            * dth
+            / rho_wo_zero,
+            {"name": "Q", "average": 1, "type": "tensor", "dir": "y"},
+        ),
+        # TODO check : je pense que c'est déjà psi*F que je moyenne
         Fx_avg=(
             ["t", "y", "x"],
             (cg_data.psi * cg_data.Fx).sum(dim="theta").data * dth / rho_wo_zero,
