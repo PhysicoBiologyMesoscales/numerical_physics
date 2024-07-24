@@ -28,9 +28,9 @@ def main():
     list_t = list(pcf_ds.t.data)
     t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
     list_th = list(pcf_ds.theta.data)
-    th_slider = pn.widgets.DiscreteSlider(name="theta", options=list_th)
+    th_slider = pn.widgets.DiscreteSlider(name="Delta Theta", options=list_th)
     list_r = list(pcf_ds.r.data)
-    rmax_slider = pn.widgets.DiscreteSlider(name="rmax", options=list_r)
+    rmax_slider = pn.widgets.DiscreteSlider(name="Max Radius", options=list_r)
     select_cmap = pn.widgets.Select(
         name="Color Map", value="viridis", options=["viridis", "jet", "bwr"]
     )
