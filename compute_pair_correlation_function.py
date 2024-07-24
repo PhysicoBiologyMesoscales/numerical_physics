@@ -167,7 +167,11 @@ def main():
         pcf_ds = xr.Dataset(
             data_vars={"g": (["r", "phi", "theta"], pcf)},
             coords=dict(
-                r=np.sqrt(np.linspace(0, rmax**2, Nr, endpoint=False)),
+                r=(
+                    np.sqrt(np.linspace(0, rmax**2, Nr, endpoint=False))
+                    + np.sqrt(np.linspace(dr2, rmax**2 + dr2, Nr, endpoint=False))
+                )
+                / 2,
                 phi=np.linspace(0, 2 * np.pi, Nphi, endpoint=False),
                 theta=np.linspace(0, 2 * np.pi, Nth, endpoint=False),
             ),
