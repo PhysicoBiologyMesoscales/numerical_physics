@@ -187,10 +187,14 @@ def main():
 
 
 if __name__ == "__main__":
+    import json
     import sys
     from unittest.mock import patch
 
-    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\ar=1.5_N=40000_phi=1.0_v0=3.0_kc=3.0_k=10.0_h=0.0_tmax=1.0"
+    with open("save_parms.json") as jsonFile:
+        save_parms = json.load(jsonFile)
+        sim_path = join(save_parms["base_folder"], save_parms["sim"])
+
     args = ["prog", sim_path, "2", "50", "31", "31"]
 
     with patch.object(sys, "argv", args):

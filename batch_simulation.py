@@ -218,12 +218,13 @@ def main():
 
 
 if __name__ == "__main__":
+    import json
     import sys
     from unittest.mock import patch
 
     # Define sim parameters
     aspect_ratio = 1.5
-    N = 40000
+    N = 10000
     phi = 1.0
     kc = 3.0
     h = 0.0
@@ -232,13 +233,21 @@ if __name__ == "__main__":
     t_max = 1.0
     v0 = 3.0
     k = 10.0
-    save_path = join(
-        r"C:\Users\nolan\Documents\PhD\Simulations\\",
-        "Data",
-        "Compute_forces",
-        "Batch",
-        f"ar={aspect_ratio}_N={N}_phi={phi}_v0={v0}_kc={kc}_k={k}_h={h}_tmax={t_max}",
+    sim_name = (
+        f"ar={aspect_ratio}_N={N}_phi={phi}_v0={v0}_kc={kc}_k={k}_h={h}_tmax={t_max}"
     )
+
+    with open("save_parms.json") as jsonFile:
+        save_parms = json.load(jsonFile)
+        base_folder = save_parms["base_folder"]
+
+    # Write new folder as current sim
+    with open("save_parms.json", "w") as jsonFile:
+        save_parms["sim"] = sim_name
+        json.dump(save_parms, jsonFile)
+
+    save_path = join(base_folder, sim_name)
+
     args = [
         "prog",
         str(aspect_ratio),

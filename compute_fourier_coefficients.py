@@ -162,8 +162,9 @@ if __name__ == "__main__":
     import sys
     from unittest.mock import patch
 
-    with open("current_sim.json") as jsonFile:
-        sim_path = json.load(jsonFile)["sim_path"]
+    with open("save_parms.json") as jsonFile:
+        save_parms = json.load(jsonFile)
+        sim_path = join(save_parms["base_folder"], save_parms["sim"])
 
     args = ["prog", sim_path]
 
