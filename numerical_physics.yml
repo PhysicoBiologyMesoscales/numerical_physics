@@ -1,0 +1,24 @@
+name: numerical-physics
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.2
+  - numpy
+  - ca-certificates
+  - openssl
+  - scipy
+  - tqdm
+  - certifi
+  - matplotlib
+  - jupyter
+  - scikit-image
+  - pandas
+  - scikit-learn
+  - dask
+  - hvplot
+  - jupyter_bokeh
+  - xarray
+  - bottleneck
+  - netcdf4
+prefix: C:\Users\nolan\anaconda3\envs\numerical-physics
