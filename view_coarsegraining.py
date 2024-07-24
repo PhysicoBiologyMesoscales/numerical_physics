@@ -31,14 +31,14 @@ def main():
     cg_ds = cg_ds.assign(
         grad_rhox=lambda arr: (
             ["t", "theta", "y", "x"],
-            (arr.psi * (arr.rho.roll(x=-1) - arr.rho.roll(x=1))).data,
+            (arr.psi * (arr.rho.roll(x=-1) - arr.rho.roll(x=1)) / 2 / cg_ds.dx).data,
             {"name": "grad_rho", "average": 1, "type": "vector", "dir": "x"},
         )
     )
     cg_ds = cg_ds.assign(
         grad_rhoy=lambda arr: (
             ["t", "theta", "y", "x"],
-            (arr.psi * (arr.rho.roll(y=-1) - arr.rho.roll(y=1))).data,
+            (arr.psi * (arr.rho.roll(y=-1) - arr.rho.roll(y=1)) / 2 / cg_ds.dy).data,
             {"name": "grad_rho", "average": 1, "type": "vector", "dir": "y"},
         )
     )
