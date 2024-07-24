@@ -50,8 +50,8 @@ def main():
             .astype(int)
             .data.flatten()
         )
-        # Compute coarse-graining matrix; Cij = 1 if particle j is in cell i, 0 otherwise
-        C = sp.eye(Nx * Ny * Nth, format="csr")[cell_data].T / N * Nx * Ny * Nth
+        # Compute coarse-graining matrix; Cij = 1 / V_cell if particle j is in cell i, 0 otherwise
+        C = sp.eye(Nx * Ny * Nth, format="csr")[cell_data].T / dx / dy / dth
 
         new_ds = xr.Dataset(
             data_vars=dict(
@@ -101,7 +101,7 @@ def main():
     cg_data = cg_data.assign(
         rho=(
             ["t", "y", "x"],
-            cg_data.psi.sum(dim="theta").data / Nth,
+            cg_data.psi.sum(dim="theta").data * dth,
             {"name": "rho", "average": 1, "type": "scalar"},
         )
     )
