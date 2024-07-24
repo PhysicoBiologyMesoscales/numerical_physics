@@ -86,14 +86,13 @@ def main():
         .apply(coarsegrain_ds)
         .assign_attrs(
             {
-                "l": l,
-                "L": L,
                 "Nx": Nx,
                 "Ny": Ny,
                 "Nth": Nth,
                 "dx": dx,
                 "dy": dy,
                 "dth": dth,
+                **full_data.attrs,
             }
         )
     )
