@@ -139,9 +139,11 @@ def main():
 
         # Compute azimuthal angle between cell polarity and particle-particle vector
         phi_ij = xij.copy()
-        phi_ij.data = np.arccos(np.einsum("ij,ij->i", r_vec, e_vec)) * np.sign(
-            np.cross(e_vec, r_vec)
-        )
+        # TODO Temp fix for floating-point error : result of np.dot(a,b) with a, b of norm 1 can be outside of [-1, 1]
+        _dot = np.einsum("ij,ij->i", r_vec, e_vec)
+        _dot = np.where(_dot < -1, -1, _dot)
+        _dot = np.where(_dot > 1, 1, _dot)
+        phi_ij.data = np.arccos(_dot) * np.sign(np.cross(e_vec, r_vec))
         phi_ij.data = np.where(phi_ij.data < 0, 2 * np.pi + phi_ij.data, phi_ij.data)
 
         ## Compute pair-correlation function
@@ -149,7 +151,7 @@ def main():
         # Sparse matrix containing bin index for particle pair (i,j)
         bin_ij = dij.copy()
         bin_ij.data = (
-            (dij.data**2 // dr2).astype(int) * Nphi * Nth
+            ((dij.data**2) // dr2).astype(int) * Nphi * Nth
             + (phi_ij.data // dphi).astype(int) * Nth
             + (thij.data // dth).astype(int)
         ) + 1
@@ -189,11 +191,9 @@ if __name__ == "__main__":
     import sys
     from unittest.mock import patch
 
-    with open("save_parms.json") as jsonFile:
-        save_parms = json.load(jsonFile)
-        sim_path = join(save_parms["base_folder"], save_parms["sim"])
+    sim_path = r"E:\Cluster_Sim_Data\out\25055629[3].torque6.curie.fr"
 
-    args = ["prog", sim_path, "2", "50", "31", "31"]
+    args = ["prog", sim_path, "2", "100", "31", "31"]
 
     with patch.object(sys, "argv", args):
         main()
