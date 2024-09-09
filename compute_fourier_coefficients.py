@@ -63,95 +63,58 @@ def main():
     # Dictionnary which will hold all hydrodynamic parameters
     parms = {}
 
-    ## m=0 : density
-    parms["chi"] = float(
-        (np.pi * ds.r * compute_fourier_coeff(ds, 0, 0)[0] * F_arr * dr2).sum(dim="r")
-    )
-    parms["zeta"] = float(
-        (np.pi * compute_fourier_coeff(ds, 1, 0)[0] * F_arr * dr2).sum(dim="r")
-    )
-    parms["kappa"] = -float(
-        (np.pi * ds.r * compute_fourier_coeff(ds, 2, 0)[0] * F_arr * dr2).sum(dim="r")
-    )
-
-    ## m=1 : polarity
-    parms["mu"] = -float(
-        (np.pi * compute_fourier_coeff(ds, 1, 1)[0] * F_arr * dr2).sum(dim="r")
-    )
-
-    parms["alpha"] = -float(
-        (np.pi * compute_fourier_coeff(ds, 1, 1)[3] * F_arr * dr2).sum(dim="r")
-    )
-
-    parms["chi_p"] = float(
-        (np.pi * ds.r * compute_fourier_coeff(ds, 0, 1)[0] * F_arr * dr2).sum(dim="r")
-    )
-
-    parms["nu1"] = -float(
-        (
-            np.pi
-            * ds.r
-            * (compute_fourier_coeff(ds, 2, 1)[0] + compute_fourier_coeff(ds, 2, 1)[3])
-            / 4
-            * F_arr
-            * dr2
-        ).sum(dim="r")
-    )
-
-    parms["nu2"] = -float(
-        (
-            np.pi
-            * ds.r
-            * (compute_fourier_coeff(ds, 2, 1)[0] - compute_fourier_coeff(ds, 2, 1)[3])
-            * F_arr
-            * dr2
-        ).sum(dim="r")
-    )
-
-    ## m=2 : nematic tensor
-    parms["upsilon1"] = -float(
-        (
-            np.pi
-            * (compute_fourier_coeff(ds, 1, 2)[0] + compute_fourier_coeff(ds, 1, 2)[3])
-            / 2
-            * F_arr
-            * dr2
-        ).sum(dim="r")
-    )
-
-    parms["upsilon2"] = -float(
-        (
-            np.pi
-            * (compute_fourier_coeff(ds, 1, 2)[0] - compute_fourier_coeff(ds, 1, 2)[3])
-            * F_arr
-            * dr2
-        ).sum(dim="r")
-    )
-
-    parms["xi1"] = -float(
-        (
-            np.pi
-            * ds.r
-            * (compute_fourier_coeff(ds, 2, 2)[0] + compute_fourier_coeff(ds, 2, 2)[3])
-            / 4
-            * F_arr
-            * dr2
-        ).sum(dim="r")
-    )
-
-    parms["xi2"] = -float(
-        (
-            np.pi
-            * ds.r
-            * (compute_fourier_coeff(ds, 2, 2)[0] - compute_fourier_coeff(ds, 2, 2)[3])
-            * F_arr
-            * dr2
-        ).sum(dim="r")
-    )
-
-    parms["chi_Q"] = float(
-        (np.pi * ds.r * compute_fourier_coeff(ds, 0, 2)[0] * F_arr * dr2).sum(dim="r")
-    )
+    for m in range(3):
+        parms[f"a_1{m}"] = -float(
+            (np.pi * ds.r * compute_fourier_coeff(ds, 1, m)[0] * F_arr * dr2).sum(
+                dim="r"
+            )
+        )
+        parms[f"a_2{m}"] = -float(
+            (np.pi * ds.r * compute_fourier_coeff(ds, 1, m)[3] * F_arr * dr2).sum(
+                dim="r"
+            )
+        )
+        parms[f"a_3{m}"] = -float(
+            (np.pi * ds.r**2 * compute_fourier_coeff(ds, 0, m)[0] * F_arr * dr2).sum(
+                dim="r"
+            )
+        )
+        parms[f"a_4{m}"] = -float(
+            (np.pi * ds.r**2 * compute_fourier_coeff(ds, 2, m)[0] * F_arr * dr2).sum(
+                dim="r"
+            )
+        )
+        parms[f"a_5{m}"] = -float(
+            (np.pi * ds.r**2 * compute_fourier_coeff(ds, 2, m)[3] * F_arr * dr2).sum(
+                dim="r"
+            )
+        )
+        parms[f"a_6{m}"] = -float(
+            (
+                np.pi / 8 * ds.r**3 * compute_fourier_coeff(ds, 1, m)[0] * F_arr * dr2
+            ).sum(dim="r")
+        )
+        parms[f"a_7{m}"] = -float(
+            (
+                np.pi / 2 * ds.r**3 * compute_fourier_coeff(ds, 3, m)[0] * F_arr * dr2
+            ).sum(dim="r")
+        )
+        parms[f"a_8{m}"] = -float(
+            (
+                np.pi / 8 * ds.r**3 * compute_fourier_coeff(ds, 1, m)[3] * F_arr * dr2
+            ).sum(dim="r")
+        )
+        parms[f"a_9{m}"] = -float(
+            (
+                np.pi / 2 * ds.r**3 * compute_fourier_coeff(ds, 3, m)[3] * F_arr * dr2
+            ).sum(dim="r")
+        )
+        parms[f"c_1{m}"] = parms[f"a_2{m}"]
+        parms[f"c_2{m}"] = -(parms[f"a_3{m}"] + 0.5 * parms[f"a_4{m}"])
+        parms[f"c_3{m}"] = parms[f"a_5{m}"] / 2
+        parms[f"c_4{m}"] = -2 * (parms[f"a_6{m}"] - 0.25 * parms[f"a_7{m}"])
+        parms[f"c_5{m}"] = -2 * (parms[f"a_8{m}"] - 0.25 * parms[f"a_9{m}"])
+        parms[f"c_6{m}"] = 2 * parms[f"a_8{m}"]
 
     with open(join(sim_path, "hydro_parms.json"), "w") as jsonFile:
         json.dump(parms, jsonFile)
