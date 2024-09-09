@@ -49,7 +49,7 @@ def main():
             .astype(int)
             .data.flatten()
         )
-        # Compute coarse-graining matrix; Cij = 1 / V_cell if particle j is in cell i, 0 otherwise
+        # Compute coarse-graining matrix; Cij = 1 / 2*pi / V_cell if particle j is in cell i, 0 otherwise
         C = sp.eye(Nx * Ny * Nth, format="csr")[cell_data].T / dx / dy / dth
 
         new_ds = xr.Dataset(
@@ -65,14 +65,14 @@ def main():
             ),
         )
         new_ds = new_ds.assign(
-            Fx=(
+            F_x=(
                 ["theta", "y", "x"],
                 (C @ ds.Fx.data).reshape((Nth, Ny, Nx)),
                 {"name": "F", "average": 0, "type": "vector", "dir": "x"},
             )
         )
         new_ds = new_ds.assign(
-            Fy=(
+            F_y=(
                 ["theta", "y", "x"],
                 (C @ ds.Fy.data).reshape((Nth, Ny, Nx)),
                 {"name": "F", "average": 0, "type": "vector", "dir": "y"},
@@ -105,21 +105,21 @@ def main():
     )
     rho_wo_zero = np.where(cg_data.rho == 0, 1.0, cg_data.rho)
     cg_data = cg_data.assign(
-        px=(
+        p_x=(
             ["t", "y", "x"],
             (cg_data.psi * np.cos(cg_data.theta)).sum(dim="theta").data
             * dth
             / rho_wo_zero,
             {"name": "p", "average": 1, "type": "vector", "dir": "x"},
         ),
-        py=(
+        p_y=(
             ["t", "y", "x"],
             (cg_data.psi * np.sin(cg_data.theta)).sum(dim="theta").data
             * dth
             / rho_wo_zero,
             {"name": "p", "average": 1, "type": "vector", "dir": "y"},
         ),
-        Qx=(
+        Q_x=(
             ["t", "y", "x"],
             (cg_data.psi * np.cos(2 * cg_data.theta)).sum(dim="theta").data
             / 2
@@ -127,7 +127,7 @@ def main():
             / rho_wo_zero,
             {"name": "Q", "average": 1, "type": "tensor", "dir": "x"},
         ),
-        Qy=(
+        Q_y=(
             ["t", "y", "x"],
             (cg_data.psi * np.sin(2 * cg_data.theta)).sum(dim="theta").data
             / 2
@@ -135,13 +135,12 @@ def main():
             / rho_wo_zero,
             {"name": "Q", "average": 1, "type": "tensor", "dir": "y"},
         ),
-        # TODO check : je pense que c'est déjà psi*F que je moyenne
-        Fx_avg=(
+        F_avg_x=(
             ["t", "y", "x"],
             (cg_data.Fx).sum(dim="theta").data * dth / rho_wo_zero,
             {"name": "F_avg", "average": 1, "type": "vector", "dir": "x"},
         ),
-        Fy_avg=(
+        F_avg_y=(
             ["t", "y", "x"],
             (cg_data.Fy).sum(dim="theta").data * dth / rho_wo_zero,
             {"name": "F_avg", "average": 1, "type": "vector", "dir": "y"},

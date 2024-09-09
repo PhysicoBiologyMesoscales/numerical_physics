@@ -6,72 +6,50 @@ from numpy.typing import NDArray
 
 class LinearRegression_xr(LinearRegression):
 
-    def __init__(self, target_field, training_fields, poly_degree: int = 1):
+    def __init__(self, target_field):
         super().__init__()
         self.training_fields = None
         self.target_field = None
         self.dims = None
-        self.exclude_dims = None
+        self.training_fields = None
         self.target_field = target_field
-        self.training_fields = sorted(training_fields)
-        self.poly_degree = poly_degree
 
     def set_input_data(self, ds: xr.Dataset) -> NDArray:
-        # Sorting is necessary to avoid mismatch in data order
-        ds = ds.broadcast_like(ds)
-        if self.dims is None or self.exclude_dims is None:
-            # Compute dimensions of data
-            self.dims = ds.dims
-            self.exclude_dims = set(ds.dims).difference(set(self.dims))
-        X = np.concatenate(
-            [
-                np.stack(
-                    [
-                        np.concatenate(
-                            [
-                                (
-                                    ds.rho**i
-                                    * ds.filter_by_attrs(
-                                        name=vector_field, type="vector", dir="x"
-                                    )
-                                )
-                                .to_dataarray()
-                                .broadcast_like(ds, exclude=self.exclude_dims)
-                                .data.flatten(),
-                                (
-                                    ds.rho**i
-                                    * ds.filter_by_attrs(
-                                        name=vector_field, type="vector", dir="y"
-                                    )
-                                )
-                                .to_dataarray()
-                                .broadcast_like(ds, exclude=self.exclude_dims)
-                                .data.flatten(),
-                            ]
-                        )
-                        for vector_field in self.training_fields
-                    ],
-                    axis=-1,
-                )
-                for i in range(self.poly_degree)
-            ],
-            axis=1,
-        )
 
+        if self.dims is None:
+            # Compute dimensions of data
+            self.dims = list(ds.sizes)
+
+        def list_fields(ds: xr.Dataset, **kwargs):
+            list_fields = []
+            for field in ds.filter_by_attrs(**kwargs):
+                field_name = ds[field].attrs["name"]
+                if field_name in list_fields:
+                    continue
+                list_fields.append(field_name)
+            return list_fields
+
+        self.training_fields = list_fields(ds, training=1)
+
+        X = np.stack(
+            [
+                np.concatenate(
+                    [
+                        (ds[f"{vector_field}_x"]).data.flatten(),
+                        (ds[f"{vector_field}_y"]).data.flatten(),
+                    ]
+                )
+                for vector_field in self.training_fields
+            ],
+            axis=-1,
+        )
         return X
 
     def set_target_data(self, ds: xr.Dataset) -> NDArray:
-        if self.exclude_dims is None or self.dims is None:
-            raise ValueError("Dimensions not set; please set input data first")
-        ds = ds.broadcast_like(ds, exclude=self.exclude_dims)
         y = np.concatenate(
             [
-                ds.filter_by_attrs(name=self.target_field, type="vector", dir="x")
-                .to_dataarray()
-                .data.flatten(),
-                ds.filter_by_attrs(name=self.target_field, type="vector", dir="y")
-                .to_dataarray()
-                .data.flatten(),
+                ds[f"{self.target_field}_x"].data.flatten(),
+                ds[f"{self.target_field}_y"].data.flatten(),
             ]
         )
         return y
@@ -81,12 +59,18 @@ class LinearRegression_xr(LinearRegression):
         y = self.set_target_data(ds)
         super().fit(X, y)
 
-    def score(
+    def score_on_dataset(
         self,
         ds: xr.Dataset,
-        t: float = None,
+        t=None,
     ):
-        ds_ = ds.sel(t=t, method="nearest") if t else ds
+        match t:
+            case float() | int():
+                ds_ = ds.sel(t=t, method="nearest")
+            case slice():
+                ds_ = ds.sel(t=t)
+            case _:
+                ds_ = ds
         X = self.set_input_data(ds_)
         y = self.set_target_data(ds_)
         return super().score(X, y)
@@ -97,19 +81,26 @@ class LinearRegression_xr(LinearRegression):
     ):
         Xpred = self.set_input_data(ds)
         ypred = super().predict(Xpred)
-        sizes = {dim: ds.sizes[dim] for dim in self.dims}
-        predx, predy = ypred.reshape((2,) + tuple(sizes.values()))
+        predx, predy = ypred.reshape((2,) + tuple(ds.sizes[dim] for dim in self.dims))
         return ds.assign(
             {
-                f"{self.target_field}_predx": (
-                    list(self.dims),
+                f"{self.target_field}_pred_x": (
+                    self.dims,
                     predx,
-                    {"name": "force_pred", "average": 1, "type": "vector", "dir": "x"},
+                    {
+                        "name": f"{self.target_field}_pred",
+                        "type": "vector",
+                        "dir": "x",
+                    },
                 ),
-                f"{self.target_field}_predy": (
-                    list(self.dims),
+                f"{self.target_field}_pred_y": (
+                    self.dims,
                     predy,
-                    {"name": "force_pred", "average": 1, "type": "vector", "dir": "y"},
+                    {
+                        "name": f"{self.target_field}_pred",
+                        "type": "vector",
+                        "dir": "y",
+                    },
                 ),
             }
         )
