@@ -1,6 +1,5 @@
 import numpy as np
 import xarray as xr
-import pandas as pd
 import scipy.sparse as sp
 import argparse
 
@@ -187,7 +186,6 @@ def main():
 
 
 if __name__ == "__main__":
-    import json
     import sys
     from unittest.mock import patch
 
