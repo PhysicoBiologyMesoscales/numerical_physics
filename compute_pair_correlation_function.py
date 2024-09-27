@@ -103,8 +103,13 @@ def main():
         y_ = inRange.multiply(ds.y)
         th_ = inRange.multiply(ds.theta)
 
-        def remove_diagonal(mat):
-            return mat - sp.diags(mat.diagonal())
+        def remove_diagonal(_mat):
+            mat = _mat.copy()
+            # TEMP FIX to avoid zeros to be removed during substraction
+            mat.data += 1
+            mat = mat - sp.diags(mat.diagonal())
+            mat.data += -1
+            return mat
 
         x_ = remove_diagonal(x_)
         y_ = remove_diagonal(y_)
@@ -189,7 +194,7 @@ if __name__ == "__main__":
     import sys
     from unittest.mock import patch
 
-    sim_path = r"E:\Cluster_Sim_Data\out\25055629[3].torque6.curie.fr"
+    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\teest_ar=1.5_N=10000_phi=1.0_v0=3.0_kc=3.0_k=10.0_h=0.0_tmax=1.0"
 
     args = ["prog", sim_path, "2", "100", "31", "31"]
 
