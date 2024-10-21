@@ -155,7 +155,8 @@ def main():
         h5py_file.attrs["N"] = N
         h5py_file.attrs["phi"] = phi
         h5py_file.attrs["l"] = l
-        h5py_file.attrs["N"] = L
+        h5py_file.attrs["L"] = L
+        h5py_file.attrs["asp"] = aspectRatio
         h5py_file.attrs["v0"] = v0
         h5py_file.attrs["k"] = k
         h5py_file.attrs["kc"] = kc
