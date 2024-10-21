@@ -1,11 +1,11 @@
 import numpy as np
-import json
 import argparse
-import xarray as xr
 import scipy.sparse as sp
-
+import h5py
 
 from os.path import join
+
+from scipy.stats import binned_statistic_dd
 
 
 def parse_args():
@@ -27,138 +27,86 @@ def parse_args():
 def main():
     args = parse_args()
     sim_path = args.sim_folder_path
-    # Load full sim data and parameters
-    full_data = xr.open_dataset(join(sim_path, "data.nc"))
-    asp = full_data.asp
-    N = full_data.N
-    phi = full_data.phi
-    l = np.sqrt(N * np.pi / asp / phi)
-    L = asp * l
-    # Load discretization parameters; y discretization is fixed by Nx and aspect ratio to get square tiles
-    Nx = args.nx
-    Ny = int(Nx * asp)
-    Nth = args.nth
-    dx = l / Nx
-    dy = L / Ny
-    dth = 2 * np.pi / Nth
+    with h5py.File(join(sim_path, "data.h5py"), "a") as hdf_file:
+        # Load full sim data and parameters
+        N = hdf_file.attrs["N"]
+        asp = hdf_file.attrs["asp"]
+        l = hdf_file.attrs["l"]
+        L = hdf_file.attrs["L"]
+        Nt = hdf_file.attrs["Nt"]
+        # Load discretization parameters; y discretization is fixed by Nx and aspect ratio to get square tiles
+        Nx = args.nx
+        Ny = int(Nx * asp)
+        Nth = args.nth
+        dx = l / Nx
+        dy = L / Ny
+        dth = 2 * np.pi / Nth
 
-    def coarsegrain_ds(ds):
-        # Compute cell number in (theta, y, x) space
-        cell_data = (
-            (ds.theta // dth * Nx * Ny + ds.y // dy * Nx + ds.x // dx)
-            .astype(int)
-            .data.flatten()
-        )
-        # Compute coarse-graining matrix; Cij = 1 / 2*pi / V_cell if particle j is in cell i, 0 otherwise
-        C = sp.eye(Nx * Ny * Nth, format="csr")[cell_data].T / dx / dy / dth
+        # Compute bins edges
+        x_bins = np.linspace(0, l, Nx + 1)  # Binning x
+        y_bins = np.linspace(0, L, Ny + 1)  # Binning y
+        th_bins = np.linspace(0, 2 * np.pi, Nth + 1)
 
-        new_ds = xr.Dataset(
-            data_vars=dict(
-                psi=(
-                    ["theta", "y", "x"],
-                    np.array(C.sum(axis=1)).reshape((Nth, Ny, Nx)),
-                    {"name": "psi", "average": 0},
-                )
-            ),
-            coords=dict(
-                theta=np.arange(Nth) * dth, x=np.arange(Nx) * dx, y=np.arange(Ny) * dy
-            ),
-        )
-        new_ds = new_ds.assign(
-            F_x=(
-                ["theta", "y", "x"],
-                (C @ ds.Fx.data).reshape((Nth, Ny, Nx)),
-                {"name": "F", "average": 0, "type": "vector", "dir": "x"},
-            )
-        )
-        new_ds = new_ds.assign(
-            F_y=(
-                ["theta", "y", "x"],
-                (C @ ds.Fy.data).reshape((Nth, Ny, Nx)),
-                {"name": "F", "average": 0, "type": "vector", "dir": "y"},
-            )
-        )
-        return new_ds
+        # Load simulation datasets
+        sim_data = hdf_file["simulation_data"]
+        t = sim_data["t"]
+        r = sim_data["r"]
+        F = sim_data["F"]
+        theta = sim_data["theta"]
 
-    cg_data = (
-        full_data.groupby("t", squeeze=False)
-        .apply(coarsegrain_ds)
-        .assign_attrs(
-            {
-                "Nx": Nx,
-                "Ny": Ny,
-                "Nth": Nth,
-                "dx": dx,
-                "dy": dy,
-                "dth": dth,
-                **full_data.attrs,
-            }
-        )
-    )
+        n_sim_points = r.size
 
-    cg_data = cg_data.assign(
-        rho=(
-            ["t", "y", "x"],
-            cg_data.psi.sum(dim="theta").data * dth,
-            {"name": "rho", "average": 1, "type": "scalar"},
+        data = np.stack(
+            [
+                np.broadcast_to(t[()], r.shape).flatten(),
+                r[()].flatten().real,
+                r[()].flatten().imag,
+                theta[()].flatten(),
+            ],
+            axis=-1,
         )
-    )
-    rho_wo_zero = np.where(cg_data.rho == 0, 1.0, cg_data.rho)
-    cg_data = cg_data.assign(
-        p_x=(
-            ["t", "y", "x"],
-            (cg_data.psi * np.cos(cg_data.theta)).sum(dim="theta").data
-            * dth
-            / rho_wo_zero,
-            {"name": "p", "average": 1, "type": "vector", "dir": "x"},
-        ),
-        p_y=(
-            ["t", "y", "x"],
-            (cg_data.psi * np.sin(cg_data.theta)).sum(dim="theta").data
-            * dth
-            / rho_wo_zero,
-            {"name": "p", "average": 1, "type": "vector", "dir": "y"},
-        ),
-        Q_x=(
-            ["t", "y", "x"],
-            (cg_data.psi * np.cos(2 * cg_data.theta)).sum(dim="theta").data
-            / 2
-            * dth
-            / rho_wo_zero,
-            {"name": "Q", "average": 1, "type": "tensor", "dir": "x"},
-        ),
-        Q_y=(
-            ["t", "y", "x"],
-            (cg_data.psi * np.sin(2 * cg_data.theta)).sum(dim="theta").data
-            / 2
-            * dth
-            / rho_wo_zero,
-            {"name": "Q", "average": 1, "type": "tensor", "dir": "y"},
-        ),
-        F_avg_x=(
-            ["t", "y", "x"],
-            (cg_data.Fx).sum(dim="theta").data * dth / rho_wo_zero,
-            {"name": "F_avg", "average": 1, "type": "vector", "dir": "x"},
-        ),
-        F_avg_y=(
-            ["t", "y", "x"],
-            (cg_data.Fy).sum(dim="theta").data * dth / rho_wo_zero,
-            {"name": "F_avg", "average": 1, "type": "vector", "dir": "y"},
-        ),
-    )
 
-    cg_data.to_netcdf(join(sim_path, "cg_data.nc"))
+        psi = (
+            binned_statistic_dd(
+                data,
+                np.arange(n_sim_points),
+                bins=[Nt, x_bins, y_bins, th_bins],
+                statistic="count",
+            ).statistic
+            / N
+            / dx
+            / dy
+            / dth
+        )
+
+        F_cg = np.nan_to_num(
+            binned_statistic_dd(
+                data,
+                [F[()].flatten().real, F[()].flatten().imag],
+                bins=[Nt, x_bins, y_bins, th_bins],
+                statistic="mean",
+            ).statistic,
+            nan=0,
+        )
+
+        if "coarse_grained" in hdf_file:
+            del hdf_file["coarse_grained"]
+
+        cg_grp = hdf_file.create_group("coarse_grained")
+        cg_grp.attrs["Nx"] = Nx
+        cg_grp.attrs["Ny"] = Ny
+        cg_grp.attrs["Nth"] = Nth
+        cg_grp.attrs["dx"] = dx
+        cg_grp.attrs["dy"] = dy
+        cg_grp.attrs["dth"] = dth
+        cg_grp.create_dataset("x", data=((x_bins[:-1] + x_bins[1:]) / 2)[:, np.newaxis])
+        cg_grp.create_dataset("y", data=((y_bins[:-1] + y_bins[1:]) / 2)[:, np.newaxis])
+        cg_grp.create_dataset(
+            "theta", data=((th_bins[:-1] + th_bins[1:]) / 2)[:, np.newaxis]
+        )
+        cg_grp.create_dataset("psi", data=psi)
+        cg_grp.create_dataset("F", data=F_cg)
 
 
 if __name__ == "__main__":
-    import json
-    import sys
-    from unittest.mock import patch
-
-    with open("save_parms.json") as jsonFile:
-        save_parms = json.load(jsonFile)
-        sim_path = join(save_parms["base_folder"], save_parms["sim"])
-
-    args = ["prog", sim_path, "20", "20"]
-    with patch.object(sys, "argv", args):
-        main()
+    main()
