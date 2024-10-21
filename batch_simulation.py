@@ -168,8 +168,8 @@ def main():
         sim = h5py_file.create_group("simulation_data")
         sim.attrs["dt_sim"] = dt
         # Create datasets for coordinates
-        sim.create_dataset("t", data=t_save_arr)
-        sim.create_dataset("p_id", data=np.arange(N))
+        sim.create_dataset("t", data=t_save_arr[:, np.newaxis])
+        sim.create_dataset("p_id", data=np.arange(N)[:, np.newaxis])
         # Create datasets for values
         r_ds = sim.create_dataset("r", shape=(Nt_save, N), dtype=np.complex64)
         F_ds = sim.create_dataset("F", shape=(Nt_save, N), dtype=np.complex64)
