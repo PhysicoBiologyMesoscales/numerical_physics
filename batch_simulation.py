@@ -171,8 +171,8 @@ def main():
         sim.create_dataset("t", data=t_save_arr)
         sim.create_dataset("p_id", data=np.arange(N))
         # Create datasets for values
-        r_ds = sim.create_dataset("r", shape=(Nt_save, N))
-        F_ds = sim.create_dataset("F", shape=(Nt_save, N))
+        r_ds = sim.create_dataset("r", shape=(Nt_save, N), dtype=np.complex64)
+        F_ds = sim.create_dataset("F", shape=(Nt_save, N), dtype=np.complex64)
         th_ds = sim.create_dataset("theta", shape=(Nt_save, N))
 
         for i, t in enumerate(tqdm(t_arr)):
