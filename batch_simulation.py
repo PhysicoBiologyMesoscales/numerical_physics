@@ -171,10 +171,8 @@ def main():
         sim.create_dataset("t", data=t_save_arr)
         sim.create_dataset("p_id", data=np.arange(N))
         # Create datasets for values
-        x_ds = sim.create_dataset("x", shape=(Nt_save, N))
-        y_ds = sim.create_dataset("y", shape=(Nt_save, N))
-        Fx_ds = sim.create_dataset("Fx", shape=(Nt_save, N))
-        Fy_ds = sim.create_dataset("Fy", shape=(Nt_save, N))
+        r_ds = sim.create_dataset("r", shape=(Nt_save, N))
+        F_ds = sim.create_dataset("F", shape=(Nt_save, N))
         th_ds = sim.create_dataset("theta", shape=(Nt_save, N))
 
         for i, t in enumerate(tqdm(t_arr)):
@@ -199,10 +197,8 @@ def main():
 
             ## Save data before position/orientation update
             if i % interval_btw_saves == 0:
-                x_ds[i // interval_btw_saves] = r[:, 0]
-                y_ds[i // interval_btw_saves] = r[:, 1]
-                Fx_ds[i // interval_btw_saves] = Fx
-                Fy_ds[i // interval_btw_saves] = Fy
+                r_ds[i // interval_btw_saves] = r[:, 0] + 1j * r[:, 1]
+                F_ds[i // interval_btw_saves] = Fx + 1j * Fy
                 th_ds[i // interval_btw_saves] = theta
                 h5py_file.flush()
 
