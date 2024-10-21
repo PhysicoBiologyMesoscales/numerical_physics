@@ -3,6 +3,7 @@ import scipy.sparse as sp
 import tkinter as tk
 import pandas as pd
 import argparse
+import h5py
 
 from os import makedirs, remove
 from os.path import join
@@ -54,17 +55,19 @@ def main():
     kc = parms.kc  # Collision force
     k = parms.k  # Polarity-velocity coupling
     h = parms.h  # Nematic field intensity
+    dt_save = parms.dt_save
 
-    dt_max = (
-        5e-2 / v0
-    )  # Max dt depends on v0 to avoid overshooting in particle collision
+    # dt_max depends on v0 to avoid overshooting in particle collision; value is empirical
+    dt_max = 5e-2 / v0
     dt = min(parms.dt, dt_max)
     # Compute frame interval between save points and make sure dt divides dt_save
-    interval_btw_saves = int(np.ceil(parms.dt_save / dt))
-    dt = parms.dt_save / interval_btw_saves
+    interval_btw_saves = int(np.ceil(dt_save / dt))
+    dt = dt_save / interval_btw_saves
 
     t_max = parms.t_max
     t_arr = np.arange(0, t_max, dt)
+    t_save_arr = np.arange(0, t_max, dt_save)
+    Nt_save = len(t_save_arr)
 
     # Cells lists number
     Nx = int(l / 2)
@@ -127,9 +130,9 @@ def main():
         Fy = np.array(Fij.multiply(yij).sum(axis=0)).flatten()
         return Fx, Fy
 
-    # Initiate fields
+    # Set initial values for fields
     r = np.random.uniform([0, 0], [l, L], size=(N, 2))
-    theta = np.random.uniform(-np.pi, np.pi, size=N)
+    theta = np.random.uniform(0, 2 * np.pi, size=N)
 
     save_path = parms.save_path
 
@@ -147,124 +150,72 @@ def main():
         rmtree(save_path)
         makedirs(save_path)
 
-    for i, t in enumerate(tqdm(t_arr)):
-        ## Compute forces
-        Fx, Fy = compute_forces(r)
-        F = v0 * np.stack([kc * Fx, kc * Fy], axis=-1)
-        # Velocity = v0*(e + F)
-        v = v0 * (
-            np.stack(
-                [
-                    np.cos(theta),
-                    np.sin(theta),
-                ],
-                axis=-1,
+    with h5py.File(join(save_path, "data.h5py"), "w") as h5py_file:
+        ## Save simulation parameters
+        h5py_file.attrs["N"] = N
+        h5py_file.attrs["phi"] = phi
+        h5py_file.attrs["l"] = l
+        h5py_file.attrs["N"] = L
+        h5py_file.attrs["v0"] = v0
+        h5py_file.attrs["k"] = k
+        h5py_file.attrs["kc"] = kc
+        h5py_file.attrs["h"] = h
+        h5py_file.attrs["dt"] = dt_save
+        h5py_file.attrs["Nt"] = Nt_save
+        h5py_file.attrs["t_max"] = t_max
+        ## Create group to store simulation results
+        sim = h5py_file.create_group("simulation_data")
+        sim.attrs["dt_sim"] = dt
+        # Create datasets for coordinates
+        sim.create_dataset("t", data=t_save_arr)
+        sim.create_dataset("p_id", data=np.arange(N))
+        # Create datasets for values
+        x_ds = sim.create_dataset("x", shape=(Nt_save, N))
+        y_ds = sim.create_dataset("y", shape=(Nt_save, N))
+        Fx_ds = sim.create_dataset("Fx", shape=(Nt_save, N))
+        Fy_ds = sim.create_dataset("Fy", shape=(Nt_save, N))
+        th_ds = sim.create_dataset("theta", shape=(Nt_save, N))
+
+        for i, t in enumerate(tqdm(t_arr)):
+            ## Compute forces
+            Fx, Fy = compute_forces(r)
+            F = kc * np.stack([Fx, Fy], axis=-1)
+            # Velocity = v0*(e + F)
+            v = v0 * (
+                np.stack(
+                    [
+                        np.cos(theta),
+                        np.sin(theta),
+                    ],
+                    axis=-1,
+                )
+                + F
             )
-            + F
-        )
-        # Gaussian white noise
-        xi = np.sqrt(2 * dt) * np.random.randn(N)
-        ## Compute angular dynamics
-        e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
+            # Gaussian white noise
+            xi = np.sqrt(2 * dt) * np.random.randn(N)
+            ## Compute angular dynamics
+            e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
 
-        ## Save data before position/orientation update
-        if i % interval_btw_saves == 0:
-            data = {
-                "t": t,
-                "theta": theta,
-                "x": r[:, 0],
-                "y": r[:, 1],
-                "Fx": F[:, 0],
-                "Fy": F[:, 1],
-            }
-            header = False
-            if i // interval_btw_saves == 0:
-                header = True
-            df = pd.DataFrame(data, index=np.arange(N))
-            df.index.set_names("p_id", inplace=True)
-            df.to_csv(join(save_path, "_temp_data.csv"), mode="a", header=header)
+            ## Save data before position/orientation update
+            if i % interval_btw_saves == 0:
+                x_ds[i // interval_btw_saves] = r[:, 0]
+                y_ds[i // interval_btw_saves] = r[:, 1]
+                Fx_ds[i // interval_btw_saves] = Fx
+                Fy_ds[i // interval_btw_saves] = Fy
+                th_ds[i // interval_btw_saves] = theta
+                h5py_file.flush()
 
-        ## Update position
-        r += dt * v
-        # Periodic BC
-        r %= np.array([l, L])
-        ## Update orientation
-        theta += (
-            dt * (-h * np.sin(2 * theta) + k * np.einsum("ij, ij->i", F, e_perp)) + xi
-        )
-        theta %= 2 * np.pi
-
-    ds = (
-        pd.read_csv(join(save_path, "_temp_data.csv"), index_col=["p_id", "t"])
-        .to_xarray()
-        .assign_attrs(
-            {
-                "asp": aspectRatio,
-                "N": N,
-                "phi": phi,
-                "v0": v0,
-                "kc": kc,
-                "k": k,
-                "h": h,
-                "l": l,
-                "L": L,
-                "t_max": t_max,
-                "dt": dt,
-                "dt_save": parms.dt_save,
-            }
-        )
-    )
-    ds.to_netcdf(join(save_path, "data.nc"))
-    remove(join(save_path, "_temp_data.csv"))
+            ## Update position
+            r += dt * v
+            # Periodic BC
+            r %= np.array([l, L])
+            ## Update orientation
+            theta += (
+                dt * (-h * np.sin(2 * theta) + k * np.einsum("ij, ij->i", F, e_perp))
+                + xi
+            )
+            theta %= 2 * np.pi
 
 
 if __name__ == "__main__":
-    import json
-    import sys
-    from unittest.mock import patch
-
-    # Define sim parameters
-    aspect_ratio = 1.5
-    N = 10000
-    phi = 1.0
-    kc = 3.0
-    h = 0.0
-    dt = 5e-3
-    dt_save = 5e-2
-    t_max = 1.0
-    v0 = 3.0
-    k = 10.0
-    sim_name = (
-        f"ar={aspect_ratio}_N={N}_phi={phi}_v0={v0}_kc={kc}_k={k}_h={h}_tmax={t_max}"
-    )
-
-    with open("save_parms.json") as jsonFile:
-        save_parms = json.load(jsonFile)
-        base_folder = save_parms["base_folder"]
-
-    # Write new folder as current sim
-    with open("save_parms.json", "w") as jsonFile:
-        save_parms["sim"] = sim_name
-        json.dump(save_parms, jsonFile)
-
-    save_path = join(base_folder, sim_name)
-
-    args = [
-        "prog",
-        str(aspect_ratio),
-        str(N),
-        str(phi),
-        str(v0),
-        str(kc),
-        str(k),
-        str(h),
-        str(t_max),
-        "--dt",
-        str(dt),
-        "--dt_save",
-        str(dt_save),
-        "--save_path",
-        save_path,
-    ]
-    with patch.object(sys, "argv", args):
-        main()
+    main()
