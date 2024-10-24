@@ -1,15 +1,15 @@
 import numpy as np
 import scipy.sparse as sp
 import tkinter as tk
-import pandas as pd
 import argparse
 import h5py
 
-from os import makedirs, remove
+from os import makedirs
 from os.path import join
 from tkinter import messagebox
 from shutil import rmtree
 from tqdm import tqdm
+from scipy.spatial import KDTree
 
 
 def parse_args():
@@ -57,6 +57,8 @@ def main():
     h = parms.h  # Nematic field intensity
     dt_save = parms.dt_save
 
+    save_path = parms.save_path
+
     # dt_max depends on v0 to avoid overshooting in particle collision; value is empirical
     dt_max = 5e-2 / v0
     dt = min(parms.dt, dt_max)
@@ -68,73 +70,6 @@ def main():
     t_arr = np.arange(0, t_max, dt)
     t_save_arr = np.arange(0, t_max, dt_save)
     Nt_save = len(t_save_arr)
-
-    # Cells lists number
-    Nx = int(l / 2)
-    Ny = int(L / 2)
-
-    # Cells lists dimensions
-    wx = l / Nx
-    wy = L / Ny
-
-    def build_neigbouring_matrix():
-        """
-        Build neighbouring matrix. neighbours[i,j]==1 if i,j cells are neighbours, 0 otherwise.
-        """
-        datax = np.ones((1, Nx)).repeat(5, axis=0)
-        datay = np.ones((1, Ny)).repeat(5, axis=0)
-        offsetsx = np.array([-Nx + 1, -1, 0, 1, Nx - 1])
-        offsetsy = np.array([-Ny + 1, -1, 0, 1, Ny - 1])
-        neigh_x = sp.dia_matrix((datax, offsetsx), shape=(Nx, Nx))
-        neigh_y = sp.dia_matrix((datay, offsetsy), shape=(Ny, Ny))
-        return sp.kron(neigh_y, neigh_x)
-
-    neighbours = build_neigbouring_matrix()
-
-    def compute_forces(r):
-        Cij = (r // np.array([wx, wy])).astype(int)
-        # 1D array encoding the index of the cell containing the particle
-        C1d = Cij[:, 0] + Nx * Cij[:, 1]
-        # One-hot encoding of the 1D cell array as a sparse matrix
-        C = sp.eye(Nx * Ny, format="csr")[C1d]
-        # N x N array; inRange[i,j]=1 if particles i, j are in neighbouring cells, 0 otherwise
-        inRange = C.dot(neighbours).dot(C.T)
-
-        y_ = inRange.multiply(r[:, 1])
-        x_ = inRange.multiply(r[:, 0])
-
-        # Compute direction vectors and apply periodic boundary conditions
-        xij = x_ - x_.T
-        x_bound_plus = (xij.data > l / 2).astype(int)
-        xij.data -= l * x_bound_plus
-        x_bound_minus = (xij.data < -l / 2).astype(int)
-        xij.data += l * x_bound_minus
-
-        yij = y_ - y_.T
-        y_bound_plus = (yij.data > L / 2).astype(int)
-        yij.data -= L * y_bound_plus
-        y_bound_minus = (yij.data < -L / 2).astype(int)
-        yij.data += L * y_bound_minus
-
-        # particle-particle distance for interacting particles
-        dij = (xij.power(2) + yij.power(2)).power(0.5)
-
-        xij.data /= dij.data
-        yij.data /= dij.data
-        dij.data -= 2
-        dij.data = np.where(dij.data < 0, dij.data, 0)
-        dij.eliminate_zeros()
-        Fij = -dij  # harmonic
-        # Fij = 12 * (-dij).power(-13) - 6 * (-dij).power(-7)  # wca
-        Fx = np.array(Fij.multiply(xij).sum(axis=0)).flatten()
-        Fy = np.array(Fij.multiply(yij).sum(axis=0)).flatten()
-        return Fx, Fy
-
-    # Set initial values for fields
-    r = np.random.uniform([0, 0], [l, L], size=(N, 2))
-    theta = np.random.uniform(0, 2 * np.pi, size=N)
-
-    save_path = parms.save_path
 
     try:
         makedirs(save_path)
@@ -175,10 +110,51 @@ def main():
         F_ds = sim.create_dataset("F", shape=(Nt_save, N), dtype=np.complex64)
         th_ds = sim.create_dataset("theta", shape=(Nt_save, N))
 
+    # Set initial values for fields
+    r = np.random.uniform([0, 0], [l, L], size=(N, 2))
+    theta = np.random.uniform(0, 2 * np.pi, size=N)
+
+    # Initialize tree
+    tree = KDTree(r)
+    tree_ref = r
+
+    def compute_forces(r, tree: KDTree):
+        F = np.zeros((N, 2))
+        pairs = tree.query_pairs(2.0, output_type="ndarray")
+        rij = r[pairs[:, 1]] - r[pairs[:, 0]]
+        Fij = -kc * rij
+        np.add.at(F, pairs[:, 0], Fij)
+        np.add.at(F, pairs[:, 1], -Fij)
+        return F
+
+    with h5py.File(join(save_path, "data.h5py"), "w") as h5py_file:
+        ## Save simulation parameters
+        h5py_file.attrs["N"] = N
+        h5py_file.attrs["phi"] = phi
+        h5py_file.attrs["l"] = l
+        h5py_file.attrs["L"] = L
+        h5py_file.attrs["asp"] = aspectRatio
+        h5py_file.attrs["v0"] = v0
+        h5py_file.attrs["k"] = k
+        h5py_file.attrs["kc"] = kc
+        h5py_file.attrs["h"] = h
+        h5py_file.attrs["dt"] = dt_save
+        h5py_file.attrs["Nt"] = Nt_save
+        h5py_file.attrs["t_max"] = t_max
+        ## Create group to store simulation results
+        sim = h5py_file.create_group("simulation_data")
+        sim.attrs["dt_sim"] = dt
+        # Create datasets for coordinates
+        sim.create_dataset("t", data=t_save_arr[:, np.newaxis])
+        sim.create_dataset("p_id", data=np.arange(N)[:, np.newaxis])
+        # Create datasets for values
+        r_ds = sim.create_dataset("r", shape=(Nt_save, N), dtype=np.complex64)
+        F_ds = sim.create_dataset("F", shape=(Nt_save, N), dtype=np.complex64)
+        th_ds = sim.create_dataset("theta", shape=(Nt_save, N))
+
         for i, t in enumerate(tqdm(t_arr)):
             ## Compute forces
-            Fx, Fy = compute_forces(r)
-            F = kc * np.stack([Fx, Fy], axis=-1)
+            F = compute_forces(r, tree)
             # Velocity = v0*(e + F)
             v = v0 * (
                 np.stack(
@@ -198,7 +174,7 @@ def main():
             ## Save data before position/orientation update
             if i % interval_btw_saves == 0:
                 r_ds[i // interval_btw_saves] = r[:, 0] + 1j * r[:, 1]
-                F_ds[i // interval_btw_saves] = Fx + 1j * Fy
+                F_ds[i // interval_btw_saves] = F[:, 0] + 1j * F[:, 1]
                 th_ds[i // interval_btw_saves] = theta
                 h5py_file.flush()
 
@@ -212,6 +188,12 @@ def main():
                 + xi
             )
             theta %= 2 * np.pi
+
+            # Check if tree needs rebuilding
+            disp = np.linalg.norm(r - tree_ref, axis=1)
+            if np.max(abs(disp)) > 1.0:
+                tree = KDTree(r)
+                tree_ref = r
 
 
 if __name__ == "__main__":
