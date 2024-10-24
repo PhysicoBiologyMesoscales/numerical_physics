@@ -2,6 +2,10 @@ import numpy as np
 import xarray as xr
 import scipy.sparse as sp
 import argparse
+import h5py
+from scipy.spatial import cKDTree
+from scipy.stats import binned_statistic_dd
+
 
 from os.path import join
 
@@ -21,11 +25,16 @@ def parse_args():
     )
     parser.add_argument(
         "Nphi",
-        help="Number of discretization points on the orthoradial dimension",
+        help="Number of discretization points on the azimuthal angle",
         type=int,
     )
     parser.add_argument(
         "Nth",
+        help="Number of discretization points on the particle position",
+        type=int,
+    )
+    parser.add_argument(
+        "Ndth",
         help="Number of discretization points for polarity difference between particles",
         type=int,
     )
@@ -35,168 +44,97 @@ def parse_args():
 def main():
     args = parse_args()
     sim_path = args.sim_folder_path
-    sim_data = xr.open_dataset(join(sim_path, "data.nc"))
+    with h5py.File(join(sim_path, "data.h5py"), "a") as hdf_file:
+        Nt = hdf_file.attrs["Nt"]
+        N = hdf_file.attrs["N"]
+        l = hdf_file.attrs["l"]
+        L = hdf_file.attrs["L"]
 
-    asp = sim_data.asp
-    N = sim_data.N
-    l = np.sqrt(N * np.pi / asp / sim_data.phi)
-    L = asp * l
+        sim_data = hdf_file["simulation_data"]
+        r = sim_data["r"]
+        theta = sim_data["theta"]
 
-    Nx = int(l / 2)
-    Ny = int(L / 2)
-    dx = l / Nx
-    dy = L / Ny
+        Nx = int(l / 2)
+        Ny = int(L / 2)
+        dx = l / Nx
+        dy = L / Ny
 
-    # Binning dimensions
-    Nr, Nphi, Nth = args.Nr, args.Nphi, args.Nth
-    rmax = args.r_max
-    # Load only cells which are in the given range of interaction
-    neigh_range = int(np.ceil((rmax + 1) / 2))
-    dr2, dphi, dth = rmax**2 / Nr, 2 * np.pi / Nphi, 2 * np.pi / Nth
-
-    def build_neigbouring_matrix(neigh_range: int = 1):
-        """
-        Build neighbouring matrix. neighbours[i,j]==1 if i,j cells are neighbours, 0 otherwise.
-        """
-        datax = np.ones((1, Nx)).repeat(1 + 4 * neigh_range, axis=0)
-        datay = np.ones((1, Ny)).repeat(1 + 4 * neigh_range, axis=0)
-        offsetsx = np.array(
-            [0]
-            + [
-                f(i)
-                for i in range(1, neigh_range + 1)
-                for f in (
-                    lambda x: -Nx + x,
-                    lambda x: Nx - x,
-                    lambda x: -x,
-                    lambda x: x,
-                )
-            ]
-        )
-        offsetsy = np.array(
-            [0]
-            + [
-                f(i)
-                for i in range(1, neigh_range + 1)
-                for f in (
-                    lambda x: -Ny + x,
-                    lambda x: Ny - x,
-                    lambda x: -x,
-                    lambda x: x,
-                )
-            ]
-        )
-        neigh_x = sp.dia_matrix((datax, offsetsx), shape=(Nx, Nx))
-        neigh_y = sp.dia_matrix((datay, offsetsy), shape=(Ny, Ny))
-        return sp.kron(neigh_y, neigh_x)
-
-    neigh = build_neigbouring_matrix(neigh_range=neigh_range)
-
-    def compute_pcf(ds):
-        cell_data = (ds.y // dy * Nx + ds.x // dx).astype(int).data.flatten()
-        # Compute coarse-graining matrix; Cij = 1 if particle j is in cell i, 0 otherwise
-        C = sp.eye(Nx * Ny, format="csr")[cell_data]
-        # inRange[i,j]=1 if cells i,j are in neighbouring cells, 0 otherwise
-        inRange = C.dot(neigh).dot(C.T)
-        # Get positions and orientations for interacting cells
-        x_ = inRange.multiply(ds.x)
-        y_ = inRange.multiply(ds.y)
-        th_ = inRange.multiply(ds.theta)
-
-        def remove_diagonal(_mat):
-            mat = _mat.copy()
-            # TEMP FIX to avoid zeros to be removed during substraction
-            mat.data += 1
-            mat = mat - sp.diags(mat.diagonal())
-            mat.data += -1
-            return mat
-
-        x_ = remove_diagonal(x_)
-        y_ = remove_diagonal(y_)
-        th_ = remove_diagonal(th_)
-
-        # Compute direction vectors and apply periodic boundary conditions
-        xij = x_ - x_.T
-        x_bound_plus = (xij.data > l / 2).astype(int)
-        xij.data -= l * x_bound_plus
-        x_bound_minus = (xij.data < -l / 2).astype(int)
-        xij.data += l * x_bound_minus
-
-        yij = y_ - y_.T
-        y_bound_plus = (yij.data > L / 2).astype(int)
-        yij.data -= L * y_bound_plus
-        y_bound_minus = (yij.data < -L / 2).astype(int)
-        yij.data += L * y_bound_minus
-
-        # Compute orientation difference in [0, 2*pi] range
-        thij = th_ - th_.T
-        thij.data = np.where(thij.data < 0, 2 * np.pi + thij.data, thij.data)
-
-        # Particle-particle distance for interacting particles
-        dij = (xij.power(2) + yij.power(2)).power(0.5)
-
-        r_vec = np.stack([xij.data / dij.data, yij.data / dij.data], axis=-1)
-        e_vec = np.stack(
-            [np.cos(sp.csr_matrix(th_.T).data), np.sin(sp.csr_matrix(th_.T).data)],
-            axis=-1,
+        # Binning dimensions
+        Nr, Nphi, Nth, Ndth = args.Nr, args.Nphi, args.Nth, args.Ndth
+        rmax = args.r_max
+        # Load only cells which are in the given range of interaction
+        dr2, dphi, dth, ddth = (
+            rmax**2 / Nr,
+            2 * np.pi / Nphi,
+            2 * np.pi / Nth,
+            2 * np.pi / Ndth,
         )
 
-        # Compute azimuthal angle between cell polarity and particle-particle vector
-        phi_ij = xij.copy()
-        # TODO Temp fix for floating-point error : result of np.dot(a,b) with a, b of norm 1 can be outside of [-1, 1]
-        _dot = np.einsum("ij,ij->i", r_vec, e_vec)
-        _dot = np.where(_dot < -1, -1, _dot)
-        _dot = np.where(_dot > 1, 1, _dot)
-        phi_ij.data = np.arccos(_dot) * np.sign(np.cross(e_vec, r_vec))
-        phi_ij.data = np.where(phi_ij.data < 0, 2 * np.pi + phi_ij.data, phi_ij.data)
+        # Compute bins edges
+        r_bins = np.sqrt(np.linspace(0, rmax**2, Nr + 1))  # Binning r
+        phi_bins = np.linspace(0, 2 * np.pi, Nphi + 1)  # Binning phi
+        th_bins = np.linspace(0, 2 * np.pi, Nth + 1)  # Binning theta
+        dth_bins = np.linspace(0, 2 * np.pi, Ndth + 1)  # Binning Delta_theta
 
-        ## Compute pair-correlation function
+        if "pair_correlation" in hdf_file:
+            del hdf_file["pair_correlation"]
 
-        # Sparse matrix containing bin index for particle pair (i,j)
-        bin_ij = dij.copy()
-        bin_ij.data = (
-            ((dij.data**2) // dr2).astype(int) * Nphi * Nth
-            + (phi_ij.data // dphi).astype(int) * Nth
-            + (thij.data // dth).astype(int)
-        ) + 1
-        bin_ij.data = np.where(bin_ij.data > Nr * Nphi * Nth, 0, bin_ij.data)
-        bin_ij.eliminate_zeros()
-        bin_ij.data -= 1
-
-        pcf = np.zeros((Nr, Nphi, Nth))
-        idx_1d, counts = np.unique(bin_ij.data, return_counts=True)
-        idx = np.unravel_index(idx_1d, shape=(Nr, Nphi, Nth))
-        pcf[idx] = counts
-
-        pcf_ds = xr.Dataset(
-            data_vars={"g": (["r", "phi", "theta"], pcf)},
-            coords=dict(
-                r=(
-                    np.sqrt(np.linspace(0, rmax**2, Nr, endpoint=False))
-                    + np.sqrt(np.linspace(dr2, rmax**2 + dr2, Nr, endpoint=False))
-                )
-                / 2,
-                phi=np.linspace(0, 2 * np.pi, Nphi, endpoint=False),
-                theta=np.linspace(0, 2 * np.pi, Nth, endpoint=False),
-            ),
+        pcf_grp = hdf_file.create_group("pair_correlation")
+        pcf_grp.attrs["Nr"] = Nr
+        pcf_grp.attrs["Nphi"] = Nphi
+        pcf_grp.attrs["Nth"] = Nth
+        pcf_grp.attrs["Ndth"] = Ndth
+        pcf_grp.attrs["dr2"] = dr2
+        pcf_grp.attrs["dphi"] = dphi
+        pcf_grp.attrs["dth"] = dth
+        pcf_grp.attrs["ddth"] = ddth
+        pcf_grp.create_dataset(
+            "r", data=((r_bins[:-1] + r_bins[1:]) / 2)[:, np.newaxis]
         )
-        return pcf_ds
+        pcf_grp.create_dataset(
+            "phi", data=((phi_bins[:-1] + phi_bins[1:]) / 2)[:, np.newaxis]
+        )
+        pcf_grp.create_dataset(
+            "d_theta", data=((dth_bins[:-1] + dth_bins[1:]) / 2)[:, np.newaxis]
+        )
+        pcf = pcf_grp.create_dataset("pcf", shape=(Nt, Nr, Nphi, Nth, Ndth))
 
-    pcf_ds = sim_data.groupby("t", squeeze=False).apply(compute_pcf)
-    pcf_ds = pcf_ds.assign(g=pcf_ds.g / pcf_ds.g.mean(dim=["r", "phi"]))
-    pcf_ds = pcf_ds.assign_attrs(
-        {"dr2": dr2, "dphi": dphi, "dth": dth, **sim_data.attrs}
-    )
-    pcf_ds.to_netcdf(join(sim_path, "pcf.nc"))
+        for i in range(Nt):
+            r_t = r[i]
+            th_t = theta[i]
+            ## Build cKDTree for efficient nearest-neighbour search
+            pos = np.stack([r_t.real, r_t.imag], axis=-1)
+            tree = cKDTree(pos)
+            pairs = tree.query_pairs(rmax, output_type="ndarray")
+            ## Compute coordinates of each pair
+            rij = r_t[pairs[:, 0]] - r_t[pairs[:, 1]]
+            # Particle-particle distance
+            dij = np.abs(rij)
+            # Azimuthal angle
+            e_t = np.exp(1j * th_t)[pairs[:, 0]]
+            phi = np.angle(rij / dij / e_t) % (2 * np.pi)
+            # Angle of reference particle
+            thi = th_t[pairs[:, 0]]
+            # Polarity angle difference
+            thij = (th_t[pairs[:, 0]] - th_t[pairs[:, 1]]) % (2 * np.pi)
+            # data to bin
+            data = np.stack([dij, phi, thi, thij], axis=-1)
+
+            n_pairs = pairs.shape[0]
+
+            pcf_t = binned_statistic_dd(
+                data,
+                np.arange(n_pairs),
+                bins=[r_bins, phi_bins, th_bins, dth_bins],
+                statistic="count",
+            ).statistic
+
+            pcf_t /= np.where(pcf_t.mean(axis=(2, 3)) > 0, pcf_t.mean(axis=(2, 3)), 1.0)
+
+            pcf[i] = pcf_t
+
+            hdf_file.flush()
 
 
 if __name__ == "__main__":
-    import sys
-    from unittest.mock import patch
-
-    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\teest_ar=1.5_N=10000_phi=1.0_v0=3.0_kc=3.0_k=10.0_h=0.0_tmax=1.0"
-
-    args = ["prog", sim_path, "2", "100", "31", "31"]
-
-    with patch.object(sys, "argv", args):
-        main()
+    main()
