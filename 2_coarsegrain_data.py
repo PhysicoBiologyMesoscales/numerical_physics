@@ -37,9 +37,9 @@ def main():
         Nx = args.nx
         Ny = int(Nx * asp)
         Nth = args.nth
-        dx = l / Nx
-        dy = L / Ny
-        dth = 2 * np.pi / Nth
+        dx = l / (Nx + 1)
+        dy = L / (Ny + 1)
+        dth = 2 * np.pi / (Nth + 1)
 
         # Compute bins edges
         x_bins = np.linspace(0, l, Nx + 1)  # Binning x

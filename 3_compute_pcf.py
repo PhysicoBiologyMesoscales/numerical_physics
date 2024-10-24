@@ -44,28 +44,20 @@ def main():
     sim_path = args.sim_folder_path
     with h5py.File(join(sim_path, "data.h5py"), "a") as hdf_file:
         Nt = hdf_file.attrs["Nt"]
-        N = hdf_file.attrs["N"]
-        l = hdf_file.attrs["l"]
-        L = hdf_file.attrs["L"]
 
         sim_data = hdf_file["simulation_data"]
         r = sim_data["r"]
         theta = sim_data["theta"]
-
-        Nx = int(l / 2)
-        Ny = int(L / 2)
-        dx = l / Nx
-        dy = L / Ny
 
         # Binning dimensions
         Nr, Nphi, Nth, Ndth = args.Nr, args.Nphi, args.Nth, args.Ndth
         rmax = args.r_max
         # Load only cells which are in the given range of interaction
         dr2, dphi, dth, ddth = (
-            rmax**2 / Nr,
-            2 * np.pi / Nphi,
-            2 * np.pi / Nth,
-            2 * np.pi / Ndth,
+            rmax**2 / (Nr + 1),
+            2 * np.pi / (Nphi + 1),
+            2 * np.pi / (Nth + 1),
+            2 * np.pi / (Ndth + 1),
         )
 
         # Compute bins edges
