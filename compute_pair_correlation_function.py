@@ -1,9 +1,7 @@
 import numpy as np
-import xarray as xr
-import scipy.sparse as sp
 import argparse
 import h5py
-from scipy.spatial import cKDTree
+from scipy.spatial import KDTree
 from scipy.stats import binned_statistic_dd
 
 
@@ -102,9 +100,9 @@ def main():
         for i in range(Nt):
             r_t = r[i]
             th_t = theta[i]
-            ## Build cKDTree for efficient nearest-neighbour search
+            ## Build KDTree for efficient nearest-neighbour search
             pos = np.stack([r_t.real, r_t.imag], axis=-1)
-            tree = cKDTree(pos)
+            tree = KDTree(pos)
             pairs = tree.query_pairs(rmax, output_type="ndarray")
             ## Compute coordinates of each pair
             rij = r_t[pairs[:, 0]] - r_t[pairs[:, 1]]
