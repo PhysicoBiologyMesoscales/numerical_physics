@@ -82,7 +82,7 @@ def main():
         F_cg = np.nan_to_num(
             binned_statistic_dd(
                 data,
-                [F[()].flatten().real, F[()].flatten().imag],
+                F[()].flatten(),
                 bins=[Nt, x_bins, y_bins, th_bins],
                 statistic="mean",
             ).statistic,
