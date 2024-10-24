@@ -1,6 +1,5 @@
 import numpy as np
 import argparse
-import scipy.sparse as sp
 import h5py
 
 from os.path import join
