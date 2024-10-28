@@ -31,7 +31,7 @@ def parse_args():
         "--dt_save",
         help="Time interval between data saves",
         type=float,
-        default=1.0,
+        default=0.1,
     )
     parser.add_argument("--save_path", help="Path to save images", type=str)
     args = parser.parse_args()
@@ -85,47 +85,59 @@ def main():
         rmtree(save_path)
         makedirs(save_path)
 
-    with h5py.File(join(save_path, "data.h5py"), "w") as h5py_file:
-        ## Save simulation parameters
-        h5py_file.attrs["N"] = N
-        h5py_file.attrs["phi"] = phi
-        h5py_file.attrs["l"] = l
-        h5py_file.attrs["L"] = L
-        h5py_file.attrs["asp"] = aspectRatio
-        h5py_file.attrs["v0"] = v0
-        h5py_file.attrs["k"] = k
-        h5py_file.attrs["kc"] = kc
-        h5py_file.attrs["h"] = h
-        h5py_file.attrs["dt"] = dt_save
-        h5py_file.attrs["Nt"] = Nt_save
-        h5py_file.attrs["t_max"] = t_max
-        ## Create group to store simulation results
-        sim = h5py_file.create_group("simulation_data")
-        sim.attrs["dt_sim"] = dt
-        # Create datasets for coordinates
-        sim.create_dataset("t", data=t_save_arr[:, np.newaxis])
-        sim.create_dataset("p_id", data=np.arange(N)[:, np.newaxis])
-        # Create datasets for values
-        r_ds = sim.create_dataset("r", shape=(Nt_save, N), dtype=np.complex64)
-        F_ds = sim.create_dataset("F", shape=(Nt_save, N), dtype=np.complex64)
-        th_ds = sim.create_dataset("theta", shape=(Nt_save, N))
-
     # Set initial values for fields
     r = np.random.uniform([0, 0], [l, L], size=(N, 2))
     theta = np.random.uniform(0, 2 * np.pi, size=N)
 
-    # Initialize tree
-    tree = KDTree(r)
-    tree_ref = r
+    def create_virtual_bounds(r):
+        # Deal with periodic BC; copy
+        left = np.argwhere(r[:, 0] < 2.0).flatten()
+        right = np.argwhere(r[:, 0] > l - 2.0).flatten()
+        bottom = np.argwhere(r[:, 1] < 2.0).flatten()
+        up = np.argwhere(r[:, 0] > L - 2.0).flatten()
+        bottom_left = np.intersect1d(left, bottom)
+        bottom_right = np.intersect1d(right, bottom)
+        up_left = np.intersect1d(left, up)
+        up_right = np.intersect1d(right, up)
+        r_with_bounds = np.concatenate(
+            [
+                r,
+                r[left] + np.array([l, 0]),
+                r[right] - np.array([l, 0]),
+                r[bottom] + np.array([0, L]),
+                r[up] - np.array([0, L]),
+                r[bottom_left] + np.array([l, L]),
+                r[bottom_right] + np.array([-l, L]),
+                r[up_left] + np.array([l, -L]),
+                r[up_right] + np.array([-l, -L]),
+            ]
+        )
+        return r_with_bounds
 
-    def compute_forces(r, tree: KDTree):
+    # Initialize tree
+    r_with_bounds = create_virtual_bounds(r)
+    tree = KDTree(r_with_bounds)
+    tree_ref = r.copy()
+
+    def compute_forces(r_with_bounds, tree: KDTree):
         F = np.zeros((N, 2))
         pairs = tree.query_pairs(2.0, output_type="ndarray")
-        rij = r[pairs[:, 1]] - r[pairs[:, 0]]
-        Fij = -kc * rij
-        np.add.at(F, pairs[:, 0], Fij)
-        np.add.at(F, pairs[:, 1], -Fij)
+        # Discard virtual particles
+        true_pairs_1 = pairs[np.nonzero(pairs[:, 0] < N)[0]]
+        true_pairs_2 = pairs[np.nonzero(pairs[:, 1] < N)[0]]
+        rij_1 = r_with_bounds[true_pairs_1[:, 1]] - r_with_bounds[true_pairs_1[:, 0]]
+        dij_1 = np.linalg.norm(rij_1, axis=1, keepdims=True)
+        dij_1 = np.where(dij_1 == 0, 1.0, dij_1)
+        uij_1 = rij_1 / dij_1
+        rij_2 = r_with_bounds[true_pairs_2[:, 1]] - r_with_bounds[true_pairs_2[:, 0]]
+        dij_2 = np.linalg.norm(rij_2, axis=1, keepdims=True)
+        dij_2 = np.where(dij_2 == 0, 1.0, dij_2)
+        uij_2 = rij_2 / dij_2
+        np.add.at(F, true_pairs_1[:, 0], -kc * (2 * uij_1 - rij_1))
+        np.add.at(F, true_pairs_2[:, 0], -kc * (2 * uij_2 - rij_2))
         return F
+
+    count_rebuild = 0
 
     with h5py.File(join(save_path, "data.h5py"), "w") as h5py_file:
         ## Save simulation parameters
@@ -154,7 +166,7 @@ def main():
 
         for i, t in enumerate(tqdm(t_arr)):
             ## Compute forces
-            F = compute_forces(r, tree)
+            F = compute_forces(r_with_bounds, tree)
             # Velocity = v0*(e + F)
             v = v0 * (
                 np.stack(
@@ -182,6 +194,8 @@ def main():
             r += dt * v
             # Periodic BC
             r %= np.array([l, L])
+
+            r_with_bounds = create_virtual_bounds(r)
             ## Update orientation
             theta += (
                 dt * (-h * np.sin(2 * theta) + k * np.einsum("ij, ij->i", F, e_perp))
@@ -190,10 +204,16 @@ def main():
             theta %= 2 * np.pi
 
             # Check if tree needs rebuilding
-            disp = np.linalg.norm(r - tree_ref, axis=1)
-            if np.max(abs(disp)) > 1.0:
+            disp = abs(r - tree_ref)
+            disp[:, 0] = np.where(disp[:, 0] > l / 2, l - disp[:, 0], disp[:, 0])
+            disp[:, 1] = np.where(disp[:, 1] > L / 2, L - disp[:, 1], disp[:, 1])
+            if np.max(np.linalg.norm(disp, axis=1)) > 1.0:
+                # print(np.max(np.linalg.norm(disp, axis=1)))
                 tree = KDTree(r)
-                tree_ref = r
+                tree_ref = r.copy()
+                count_rebuild += 1
+
+        print(f"Tree was rebuilt {count_rebuild} times")
 
 
 if __name__ == "__main__":
