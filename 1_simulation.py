@@ -13,9 +13,7 @@ from scipy.spatial import KDTree
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Batch simulation of active particles migrating on anisotropic substrate"
-    )
+    parser = argparse.ArgumentParser(description="Batch simulation of active particles")
     parser.add_argument("ar", help="Aspect ratio of simulation area", type=float)
     parser.add_argument(
         "N_max", help="Number of particles for a packing fraction phi=1", type=int
@@ -50,6 +48,7 @@ def main():
     # Frame width
     l = np.sqrt(parms.N_max * np.pi / aspectRatio)
     L = aspectRatio * l
+    print(l, L)
     # Physical parameters
     v0 = parms.v0  # Propulsion force
     kc = parms.kc  # Collision force
@@ -89,52 +88,23 @@ def main():
     r = np.random.uniform([0, 0], [l, L], size=(N, 2))
     theta = np.random.uniform(0, 2 * np.pi, size=N)
 
-    def create_virtual_bounds(r):
-        # Deal with periodic BC; copy
-        left = np.argwhere(r[:, 0] < 2.0).flatten()
-        right = np.argwhere(r[:, 0] > l - 2.0).flatten()
-        bottom = np.argwhere(r[:, 1] < 2.0).flatten()
-        up = np.argwhere(r[:, 0] > L - 2.0).flatten()
-        bottom_left = np.intersect1d(left, bottom)
-        bottom_right = np.intersect1d(right, bottom)
-        up_left = np.intersect1d(left, up)
-        up_right = np.intersect1d(right, up)
-        r_with_bounds = np.concatenate(
-            [
-                r,
-                r[left] + np.array([l, 0]),
-                r[right] - np.array([l, 0]),
-                r[bottom] + np.array([0, L]),
-                r[up] - np.array([0, L]),
-                r[bottom_left] + np.array([l, L]),
-                r[bottom_right] + np.array([-l, L]),
-                r[up_left] + np.array([l, -L]),
-                r[up_right] + np.array([-l, -L]),
-            ]
-        )
-        return r_with_bounds
-
     # Initialize tree
-    r_with_bounds = create_virtual_bounds(r)
-    tree = KDTree(r_with_bounds)
+    tree = KDTree(r, boxsize=[l, L])
     tree_ref = r.copy()
 
-    def compute_forces(r_with_bounds, tree: KDTree):
+    def compute_forces(r, tree: KDTree):
         F = np.zeros((N, 2))
         pairs = tree.query_pairs(2.0, output_type="ndarray")
-        # Discard virtual particles
-        true_pairs_1 = pairs[np.nonzero(pairs[:, 0] < N)[0]]
-        true_pairs_2 = pairs[np.nonzero(pairs[:, 1] < N)[0]]
-        rij_1 = r_with_bounds[true_pairs_1[:, 1]] - r_with_bounds[true_pairs_1[:, 0]]
-        dij_1 = np.linalg.norm(rij_1, axis=1, keepdims=True)
-        dij_1 = np.where(dij_1 == 0, 1.0, dij_1)
-        uij_1 = rij_1 / dij_1
-        rij_2 = r_with_bounds[true_pairs_2[:, 1]] - r_with_bounds[true_pairs_2[:, 0]]
-        dij_2 = np.linalg.norm(rij_2, axis=1, keepdims=True)
-        dij_2 = np.where(dij_2 == 0, 1.0, dij_2)
-        uij_2 = rij_2 / dij_2
-        np.add.at(F, true_pairs_1[:, 0], -kc * (2 * uij_1 - rij_1))
-        np.add.at(F, true_pairs_2[:, 0], -kc * (2 * uij_2 - rij_2))
+        rij = r[pairs[:, 1]] - r[pairs[:, 0]]
+        rij[:, 0] = np.where(rij[:, 0] > l / 2, rij[:, 0] - l, rij[:, 0])
+        rij[:, 0] = np.where(rij[:, 0] < -l / 2, l + rij[:, 0], rij[:, 0])
+        rij[:, 1] = np.where(rij[:, 1] > L / 2, rij[:, 1] - L, rij[:, 1])
+        rij[:, 1] = np.where(rij[:, 1] < -L / 2, L + rij[:, 1], rij[:, 1])
+        dij = np.linalg.norm(rij, axis=1, keepdims=True)
+        dij = np.where(dij == 0, 1.0, dij)
+        uij = rij / dij
+        np.add.at(F, pairs[:, 0], -kc * (2 * uij - rij))
+        np.add.at(F, pairs[:, 1], kc * (2 * uij - rij))
         return F
 
     count_rebuild = 0
@@ -166,7 +136,7 @@ def main():
 
         for i, t in enumerate(tqdm(t_arr)):
             ## Compute forces
-            F = compute_forces(r_with_bounds, tree)
+            F = compute_forces(r, tree)
             # Velocity = v0*(e + F)
             v = v0 * (
                 np.stack(
@@ -195,7 +165,6 @@ def main():
             # Periodic BC
             r %= np.array([l, L])
 
-            r_with_bounds = create_virtual_bounds(r)
             ## Update orientation
             theta += (
                 dt * (-h * np.sin(2 * theta) + k * np.einsum("ij, ij->i", F, e_perp))
@@ -208,8 +177,7 @@ def main():
             disp[:, 0] = np.where(disp[:, 0] > l / 2, l - disp[:, 0], disp[:, 0])
             disp[:, 1] = np.where(disp[:, 1] > L / 2, L - disp[:, 1], disp[:, 1])
             if np.max(np.linalg.norm(disp, axis=1)) > 1.0:
-                # print(np.max(np.linalg.norm(disp, axis=1)))
-                tree = KDTree(r)
+                tree = KDTree(r, boxsize=[l, L])
                 tree_ref = r.copy()
                 count_rebuild += 1
 
