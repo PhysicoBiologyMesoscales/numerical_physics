@@ -1,10 +1,10 @@
 import numpy as np
 import argparse
 import h5py
+
 from scipy.spatial import KDTree
 from scipy.stats import binned_statistic_dd
-
-
+from tqdm import tqdm
 from os.path import join
 
 
@@ -44,6 +44,8 @@ def main():
     sim_path = args.sim_folder_path
     with h5py.File(join(sim_path, "data.h5py"), "a") as hdf_file:
         Nt = hdf_file.attrs["Nt"]
+        l = hdf_file.attrs["l"]
+        L = hdf_file.attrs["L"]
 
         sim_data = hdf_file["simulation_data"]
         r = sim_data["r"]
@@ -78,6 +80,7 @@ def main():
         pcf_grp.attrs["dphi"] = dphi
         pcf_grp.attrs["dth"] = dth
         pcf_grp.attrs["ddth"] = ddth
+        pcf_grp.create_dataset("t", data=sim_data["t"][()])
         pcf_grp.create_dataset(
             "r", data=((r_bins[:-1] + r_bins[1:]) / 2)[:, np.newaxis]
         )
@@ -85,28 +88,35 @@ def main():
             "phi", data=((phi_bins[:-1] + phi_bins[1:]) / 2)[:, np.newaxis]
         )
         pcf_grp.create_dataset(
+            "theta", data=((th_bins[:-1] + th_bins[1:]) / 2)[:, np.newaxis]
+        )
+        pcf_grp.create_dataset(
             "d_theta", data=((dth_bins[:-1] + dth_bins[1:]) / 2)[:, np.newaxis]
         )
         pcf = pcf_grp.create_dataset("pcf", shape=(Nt, Nr, Nphi, Nth, Ndth))
 
-        for i in range(Nt):
+        for i in tqdm(list(range(Nt))):
             r_t = r[i]
             th_t = theta[i]
             ## Build KDTree for efficient nearest-neighbour search
             pos = np.stack([r_t.real, r_t.imag], axis=-1)
-            tree = KDTree(pos)
+            tree = KDTree(pos, boxsize=[l, L])
             pairs = tree.query_pairs(rmax, output_type="ndarray")
             ## Compute coordinates of each pair
-            rij = r_t[pairs[:, 0]] - r_t[pairs[:, 1]]
+            rij = r_t[pairs[:, 1]] - r_t[pairs[:, 0]]
+            rij = np.where(rij.real > l / 2, rij - l, rij)
+            rij = np.where(rij.real < -l / 2, l + rij, rij)
+            rij = np.where(rij.imag > L / 2, rij - 1j * L, rij)
+            rij = np.where(rij.imag < -L / 2, 1j * L + rij, rij)
             # Particle-particle distance
             dij = np.abs(rij)
             # Azimuthal angle
             e_t = np.exp(1j * th_t)[pairs[:, 0]]
-            phi = np.angle(rij / dij / e_t) % (2 * np.pi)
+            phi = np.angle(rij / e_t) % (2 * np.pi)
             # Angle of reference particle
             thi = th_t[pairs[:, 0]]
             # Polarity angle difference
-            thij = (th_t[pairs[:, 0]] - th_t[pairs[:, 1]]) % (2 * np.pi)
+            thij = (th_t[pairs[:, 1]] - th_t[pairs[:, 0]]) % (2 * np.pi)
             # data to bin
             data = np.stack([dij, phi, thi, thij], axis=-1)
 
@@ -119,7 +129,8 @@ def main():
                 statistic="count",
             ).statistic
 
-            pcf_t /= np.where(pcf_t.mean(axis=(2, 3)) > 0, pcf_t.mean(axis=(2, 3)), 1.0)
+            pcf_t_mean = pcf_t.mean(axis=(0, 1), keepdims=True)
+            pcf_t /= np.where(pcf_t_mean > 0, pcf_t_mean, 1.0)
 
             pcf[i] = pcf_t
 
