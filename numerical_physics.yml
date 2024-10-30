@@ -1,4 +1,4 @@
-name: numerical-physics
+name: C:\Users\nolan\anaconda3\envs\numerical-physics
 channels:
   - conda-forge
   - defaults
@@ -18,7 +18,8 @@ dependencies:
   - dask
   - hvplot
   - jupyter_bokeh
-  - xarray
   - bottleneck
   - netcdf4
+  - h5py
+  - mdanalysis
 prefix: C:\Users\nolan\anaconda3\envs\numerical-physics
