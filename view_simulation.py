@@ -2,7 +2,8 @@ import numpy as np
 import holoviews as hv
 import panel as pn
 import argparse
-import xarray as xr
+import h5py
+import param
 
 from os.path import join
 
@@ -20,23 +21,18 @@ def parse_args():
 def main():
     parms = parse_args()
     sim_path = parms.sim_folder_path
-    sim_data = xr.open_dataset(join(sim_path, "data.nc"))
+    hdf_file = h5py.File(join(sim_path, "data.h5py"))
+    N = hdf_file.attrs["N"]
+    asp = hdf_file.attrs["asp"]
+    v0 = hdf_file.attrs["v0"]
 
-    N = sim_data.N
-    asp = sim_data.asp
-    v0 = sim_data.v0
+    sim_data = hdf_file["simulation_data"]
 
-    sim_data = sim_data.assign(
-        vx=v0 * np.cos(sim_data.theta) + sim_data.Fx,
-        vy=v0 * np.sin(sim_data.theta) + sim_data.Fy,
-    )
-
-    list_t = list(sim_data.t.data)
+    list_t = list(sim_data["t"][()].flatten())
     t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
-    list_th = list(sim_data.theta.data)
     select_visualizer = pn.widgets.Select(
         name="Visualizer",
-        value="random",
+        value="theta",
         options=["random", "vx", "vy", "theta", "Fx", "Fy"],
     )
     select_cmap = pn.widgets.Select(
@@ -46,17 +42,18 @@ def main():
     rand_color = np.arange(N)
 
     def plot_data(t, vis_field, cmap):
-        data = sim_data.sel(t=t)
+        t_idx = list_t.index(t)
+
         coords = np.array(
             [
-                data.x.data,
-                data.y.data,
+                sim_data["r"][t_idx].real,
+                sim_data["r"][t_idx].imag,
                 rand_color,
-                data.theta.data,
-                data.vx.data,
-                data.vy.data,
-                data.Fx.data,
-                data.Fy.data,
+                sim_data["theta"][t_idx],
+                # sim_data["v"][t_idx].real,
+                # sim_data["v"][t_idx].imag,
+                sim_data["F"][t_idx].real,
+                sim_data["F"][t_idx].imag,
             ]
         ).T
 
@@ -66,22 +63,20 @@ def main():
                 kwargs["clim"] = (0, N)
             case "theta":
                 kwargs["clim"] = (0, 2 * np.pi)
-            case "vx" | "vy":
-                kwargs["clim"] = (-v0, v0)
+            # case "vx" | "vy":
+            #     kwargs["clim"] = (-v0, v0)
             case "Fx":
-                Fmax = float(abs(data.Fx).max())
+                Fmax = float(abs(sim_data["Fx"]).max())
                 kwargs["clim"] = (-Fmax, Fmax)
             case "Fy":
-                Fmax = float(abs(data.Fy).max())
+                Fmax = float(abs(sim_data["Fy"]).max())
                 kwargs["clim"] = (-Fmax, Fmax)
 
-        plot = hv.Points(
-            coords, vdims=["random", "theta", "vx", "vy", "Fx", "Fy"]
-        ).opts(
+        plot = hv.Points(coords, vdims=["random", "theta", "Fx", "Fy"]).opts(
             width=400,
             height=int(asp * 400),
             cmap=cmap,
-            size=0.3,
+            size=0.1,
             color=vis_field,
             **kwargs,
         )
@@ -106,7 +101,7 @@ def main():
         ),
         dmap,
     )
-    return sim_data, row
+    return hdf_file, row
 
 
 if __name__ == "__main__":
@@ -114,7 +109,7 @@ if __name__ == "__main__":
     from unittest.mock import patch
 
     pn.extension()
-    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\ar=1.5_N=40000_phi=1.0_v0=3.0_kc=3.0_k=10.0_h=0.0_tmax=1.0"
+    sim_path = r"C:\Users\nolan\Documents\PhD\Simulations\Data\Compute_forces\Batch\Test_rebuild"
     args = ["prog", sim_path]
     with patch.object(sys, "argv", args):
-        sim_data, row = main()
+        hdf_file, row = main()
