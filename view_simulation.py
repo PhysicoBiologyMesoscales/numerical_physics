@@ -3,7 +3,6 @@ import holoviews as hv
 import panel as pn
 import argparse
 import h5py
-import param
 
 from os.path import join
 

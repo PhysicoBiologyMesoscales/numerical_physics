@@ -2,8 +2,6 @@ import numpy as np
 import holoviews as hv
 import panel as pn
 import argparse
-import xarray as xr
-from linear_regression import LinearRegression_xr
 import h5py
 
 from os.path import join
