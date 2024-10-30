@@ -98,6 +98,7 @@ def main():
         cg_grp.attrs["dx"] = dx
         cg_grp.attrs["dy"] = dy
         cg_grp.attrs["dth"] = dth
+        cg_grp.create_dataset("t", data=t)
         cg_grp.create_dataset("x", data=((x_bins[:-1] + x_bins[1:]) / 2)[:, np.newaxis])
         cg_grp.create_dataset("y", data=((y_bins[:-1] + y_bins[1:]) / 2)[:, np.newaxis])
         cg_grp.create_dataset(
