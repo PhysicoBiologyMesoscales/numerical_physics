@@ -1,25 +1,27 @@
 name: numerical-physics
 channels:
   - conda-forge
-  - defaults
 dependencies:
-  - python=3.11.2
-  - numpy
+  - bottleneck
   - ca-certificates
-  - openssl
-  - scipy
-  - tqdm
   - certifi
-  - matplotlib
-  - jupyter
-  - scikit-image
-  - pandas
-  - scikit-learn
   - dask
   - hvplot
+  - jupyter
   - jupyter_bokeh
-  - bottleneck
+  - matplotlib
   - netcdf4
+  - numpy
+  - openssl
+  - pandas
+  - python=3.11.2
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - tqdm
   - h5py
   - mdanalysis
-prefix: numerical-physics
+  - selenium
+  - firefox
+  - geckodriver
+prefix: C:\Users\nolan\miniconda3\envs\numerical-physics
