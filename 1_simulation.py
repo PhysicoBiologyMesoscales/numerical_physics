@@ -4,7 +4,6 @@ import h5py
 
 from os import makedirs
 from os.path import join
-from tkinter import messagebox
 from shutil import rmtree
 from tqdm import tqdm
 from scipy.spatial import KDTree
