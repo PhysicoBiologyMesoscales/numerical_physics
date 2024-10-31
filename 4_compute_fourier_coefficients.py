@@ -25,9 +25,9 @@ def main():
         pcf_grp = hdf_file["pair_correlation"]
         # Recover pcf coordinates
         r = pcf_grp["r"][()].flatten()
-        phi = pcf_grp["phi"][()]
-        theta = pcf_grp["theta"][()]
-        delta_theta = pcf_grp["d_theta"][()]
+        phi = pcf_grp["phi"][()].flatten()
+        theta = pcf_grp["theta"][()].flatten()
+        delta_theta = pcf_grp["d_theta"][()].flatten()
 
         pcf_full = pcf_grp["pcf"][1:]
         # Average over time
@@ -56,9 +56,9 @@ def main():
             a_lmn = (
                 mul
                 * pcf
-                * np.cos(l * phi)
-                * np.cos(m * delta_theta)
-                * np.cos(n * theta)
+                * np.cos(l * phi)[np.newaxis, :, np.newaxis, np.newaxis]
+                * np.cos(m * delta_theta)[np.newaxis, np.newaxis, np.newaxis, :]
+                * np.cos(n * theta)[np.newaxis, np.newaxis, :, np.newaxis]
                 * dth
                 * dphi
                 * ddth
@@ -66,9 +66,9 @@ def main():
             b_lmn = (
                 mul
                 * pcf
-                * np.sin(l * phi)
-                * np.cos(m * delta_theta)
-                * np.cos(n * theta)
+                * np.sin(l * phi)[np.newaxis, :, np.newaxis, np.newaxis]
+                * np.cos(m * delta_theta)[np.newaxis, np.newaxis, np.newaxis, :]
+                * np.cos(n * theta)[np.newaxis, np.newaxis, :, np.newaxis]
                 * dth
                 * dphi
                 * ddth
@@ -76,9 +76,9 @@ def main():
             c_lmn = (
                 mul
                 * pcf
-                * np.cos(l * phi)
-                * np.sin(m * delta_theta)
-                * np.cos(n * theta)
+                * np.cos(l * phi)[np.newaxis, :, np.newaxis, np.newaxis]
+                * np.sin(m * delta_theta)[np.newaxis, np.newaxis, np.newaxis, :]
+                * np.cos(n * theta)[np.newaxis, np.newaxis, :, np.newaxis]
                 * dth
                 * dphi
                 * ddth
@@ -86,9 +86,9 @@ def main():
             d_lmn = (
                 mul
                 * pcf
-                * np.sin(l * phi)
-                * np.sin(m * delta_theta)
-                * np.cos(n * theta)
+                * np.sin(l * phi)[np.newaxis, :, np.newaxis, np.newaxis]
+                * np.sin(m * delta_theta)[np.newaxis, np.newaxis, np.newaxis, :]
+                * np.cos(n * theta)[np.newaxis, np.newaxis, :, np.newaxis]
                 * dth
                 * dphi
                 * ddth
@@ -96,9 +96,9 @@ def main():
             e_lmn = (
                 mul
                 * pcf
-                * np.cos(l * phi)
-                * np.cos(m * delta_theta)
-                * np.sin(n * theta)
+                * np.cos(l * phi)[np.newaxis, :, np.newaxis, np.newaxis]
+                * np.cos(m * delta_theta)[np.newaxis, np.newaxis, np.newaxis, :]
+                * np.sin(n * theta)[np.newaxis, np.newaxis, :, np.newaxis]
                 * dth
                 * dphi
                 * ddth
@@ -106,9 +106,9 @@ def main():
             f_lmn = (
                 mul
                 * pcf
-                * np.sin(l * phi)
-                * np.cos(m * delta_theta)
-                * np.sin(n * theta)
+                * np.sin(l * phi)[np.newaxis, :, np.newaxis, np.newaxis]
+                * np.cos(m * delta_theta)[np.newaxis, np.newaxis, np.newaxis, :]
+                * np.sin(n * theta)[np.newaxis, np.newaxis, :, np.newaxis]
                 * dth
                 * dphi
                 * ddth
@@ -116,9 +116,9 @@ def main():
             g_lmn = (
                 mul
                 * pcf
-                * np.cos(l * phi)
-                * np.sin(m * delta_theta)
-                * np.sin(n * theta)
+                * np.cos(l * phi)[np.newaxis, :, np.newaxis, np.newaxis]
+                * np.sin(m * delta_theta)[np.newaxis, np.newaxis, np.newaxis, :]
+                * np.sin(n * theta)[np.newaxis, np.newaxis, :, np.newaxis]
                 * dth
                 * dphi
                 * ddth
@@ -126,9 +126,9 @@ def main():
             h_lmn = (
                 mul
                 * pcf
-                * np.sin(l * phi)
-                * np.sin(m * delta_theta)
-                * np.sin(n * theta)
+                * np.sin(l * phi)[np.newaxis, :, np.newaxis, np.newaxis]
+                * np.sin(m * delta_theta)[np.newaxis, np.newaxis, np.newaxis, :]
+                * np.sin(n * theta)[np.newaxis, np.newaxis, :, np.newaxis]
                 * dth
                 * dphi
                 * ddth
