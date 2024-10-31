@@ -46,7 +46,6 @@ def main():
     # Frame width
     l = np.sqrt(parms.N_max * np.pi / aspectRatio)
     L = aspectRatio * l
-    print(l, L)
     # Physical parameters
     v0 = parms.v0  # Propulsion force
     kc = parms.kc  # Collision force
