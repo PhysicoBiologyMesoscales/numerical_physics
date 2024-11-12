@@ -120,6 +120,7 @@ def main():
         # Create datasets for values
         r_ds = sim.create_dataset("r", shape=(Nt_save, N), dtype=np.complex64)
         F_ds = sim.create_dataset("F", shape=(Nt_save, N), dtype=np.complex64)
+        v_ds = sim.create_dataset("v", shape=(Nt_save, N), dtype=np.complex64)
         th_ds = sim.create_dataset("theta", shape=(Nt_save, N))
 
         for i, t in enumerate(tqdm(t_arr)):
@@ -145,6 +146,7 @@ def main():
             if i % interval_btw_saves == 0:
                 r_ds[i // interval_btw_saves] = r[:, 0] + 1j * r[:, 1]
                 F_ds[i // interval_btw_saves] = F[:, 0] + 1j * F[:, 1]
+                v_ds[i // interval_btw_saves] = v[:, 0] + 1j * v[:, 1]
                 th_ds[i // interval_btw_saves] = theta
                 h5py_file.flush()
 
