@@ -32,7 +32,7 @@ t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
 select_visualizer = pn.widgets.Select(
     name="Visualizer",
     value="theta",
-    options=["random", "theta", "Fx", "Fy"],
+    options=["random", "theta", "px", "py", "Fx", "Fy"],
 )
 select_cmap = pn.widgets.Select(
     name="Color Map", value="bwr", options=["viridis", "jet", "blues", "bwr"]
@@ -67,17 +67,17 @@ def plot_data(t, vis_field, cmap):
         case "px" | "py":
             kwargs["clim"] = (-1.0, 1.0)
         case "Fx":
-            Fmax = float(abs(sim_data["F"][()].real).max())
+            Fmax = float(abs(sim_data["F"][t_idx].real).max())
             kwargs["clim"] = (-Fmax, Fmax)
         case "Fy":
-            Fmax = float(abs(sim_data["F"][()].imag).max())
+            Fmax = float(abs(sim_data["F"][t_idx].imag).max())
             kwargs["clim"] = (-Fmax, Fmax)
 
     plot = hv.Points(coords, vdims=["random", "theta", "px", "py", "Fx", "Fy"]).opts(
         width=800,
         height=int(asp * 800),
         cmap=cmap,
-        size=1,
+        size=np.sqrt(1e5 / N),
         color=vis_field,
         **kwargs,
     )
