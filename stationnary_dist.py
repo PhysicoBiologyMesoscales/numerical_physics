@@ -1,35 +1,46 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from mpl_toolkits.mplot3d import Axes3D
 
-z = np.linspace(0, 100, 10000)
+import matplotlib
+
+matplotlib.use("TkAgg")
+
+p_possible = np.linspace(0, 1, 1000)
+Nk, Nh = 80, 50
+K = np.concatenate(
+    [np.linspace(0, 0.4, 10), np.linspace(0.4, 1.5, Nk - 20), np.linspace(1.5, 5, 10)]
+)
+H = np.linspace(0, 5, Nh)
 
 
-def trunc_series(z, n, n_max=30):
-    if n == n_max:
-        return 1 + z / n / (n + 1)
-    else:
-        return 1 + z / n / (n + 1) / trunc_series(z, n + 1, n_max)
+th = np.linspace(0, 2 * np.pi, 100)[:, *(np.newaxis,) * 3]
+_p = p_possible[np.newaxis, :, *(np.newaxis,) * 2]
+_K = K[*(np.newaxis,) * 2, :, np.newaxis]
+_H = H[*(np.newaxis,) * 3, :]
 
+num_vals = np.trapz(
+    np.cos(th) * np.exp(_H * np.cos(2 * th) + 2 * _K * _p * np.cos(th)),
+    th[:, 0, 0, 0],
+    axis=0,
+)
+den_vals = np.trapz(
+    np.exp(_H * np.cos(2 * th) + 2 * _K * _p * np.cos(th)), th[:, 0, 0, 0], axis=0
+)
 
-y = trunc_series(z, 1, n_max=100)
+volume = num_vals / den_vals - p_possible[:, *(np.newaxis,) * 2]
 
-Nk = 100
+matches = np.argwhere(np.diff(np.sign(volume), axis=0) == -2)
 
-k_arr = np.linspace(1, 10, Nk)
+p = np.zeros((Nk, Nh))
+p[matches[:, 1], matches[:, 2]] = p_possible[matches[:, 0]]
 
-kz = np.stack([k_arr, np.zeros(Nk)], axis=-1)
+X, Y = np.meshgrid(K, H)
+fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+surf = ax.plot_surface(X.T, Y.T, p, cmap=cm.coolwarm, linewidth=0, antialiased=True)
+ax.set_xlabel("K")
+ax.set_ylabel("H")
+ax.set_zlabel("p")
 
-for i, k in enumerate(k_arr):
-    kz[i, 1] = z[np.argwhere(np.diff(np.sign(y - k))).flatten()[0]]
-
-p2 = kz[:, 1] / kz[:, 0] ** 2
-plt.plot(k_arr, np.sqrt(p2))
-plt.axhline(1, color="orange", linestyle="--")
-plt.xlabel("k")
-plt.ylabel("p")
-plt.xlim((0, 10))
-plt.xticks(np.linspace(0, 10, 11))
-plt.ylim((0, 1.05))
-
-# for i in range(5,30):
-#     plt.plot(z, trunc_series(z, 1, n_max=i))
+plt.show()
