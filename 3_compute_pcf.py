@@ -108,17 +108,15 @@ def main():
             thi = th_t[pairs[:, 0]]
             # Angle of target particle
             thj = th_t[pairs[:, 1]]
-            # Polarity angle difference
-            thij = (thj - thi) % (2 * np.pi)
             # data to bin
             data = np.stack([dij, phi, thi, thj], axis=-1)
 
             n_pairs = pairs.shape[0]
 
             p_th = binned_statistic_dd(
-                th_t, np.arange(Nth), bins=[th_bins], statistic="count"
+                th_t, np.arange(N), bins=[th_bins], statistic="count"
             ).statistic
-            p_th /= N * 2 * np.pi
+            p_th /= N * dth
 
             N_pairs_t = binned_statistic_dd(
                 data,
@@ -132,12 +130,12 @@ def main():
             pcf_th = (
                 L
                 * l
-                / N
                 * N_pairs_t
                 / (
                     rdr[:, np.newaxis, np.newaxis, np.newaxis]
                     * p_th[np.newaxis, np.newaxis, :, np.newaxis]
                     * p_th[np.newaxis, np.newaxis, np.newaxis, :]
+                    * dphi
                     * dth**2
                 )
             )
