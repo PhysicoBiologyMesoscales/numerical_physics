@@ -58,6 +58,19 @@ def set_hdf_group(hdf_file, Nt, Nr, Nphi, Nth, dphi, dth, t, r_bins, phi_bins, t
     pcf_grp.create_dataset("pcf", shape=(Nt, Nr, Nphi, Nth, Nth))
 
 
+def compute_bins(rmax, Nr, Nphi, Nth):
+    dphi, dth = (
+        2 * np.pi / Nphi,
+        2 * np.pi / Nth,
+    )
+
+    # Compute bins edges
+    r_bins = np.linspace(0, rmax, Nr + 1)  # Binning r
+    phi_bins = np.linspace(0, 2 * np.pi, Nphi + 1)  # Binning phi
+    th_bins = np.linspace(0, 2 * np.pi, Nth + 1)  # Binning theta
+    return r_bins, phi_bins, th_bins, dphi, dth
+
+
 def compute_pcf(r, th, tree, rmax, l, L, N, r_bins, phi_bins, th_bins, dphi, dth):
     """Computes pair-correlation function using input kdtree for particle indexing and user-defined bins.
     r_bins can have arbitrary spacing, phi_bins and th_bins must be evenly spaced with spacing dphi, dth
@@ -139,16 +152,8 @@ def main():
         # Binning dimensions
         Nr, Nphi, Nth = args.Nr, args.Nphi, args.Nth
         rmax = args.r_max
-        # Load only cells which are in the given range of interaction
-        dphi, dth = (
-            2 * np.pi / Nphi,
-            2 * np.pi / Nth,
-        )
 
-        # Compute bins edges
-        r_bins = np.linspace(0, rmax, Nr + 1)  # Binning r
-        phi_bins = np.linspace(0, 2 * np.pi, Nphi + 1)  # Binning phi
-        th_bins = np.linspace(0, 2 * np.pi, Nth + 1)  # Binning theta
+        r_bins, phi_bins, th_bins, dphi, dth = compute_bins(rmax, Nr, Nphi, Nth)
 
         set_hdf_group(
             hdf_file,
