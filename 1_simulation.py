@@ -118,7 +118,7 @@ def main():
         sim.create_dataset("t", data=t_save_arr[:, np.newaxis])
         sim.create_dataset("p_id", data=np.arange(N)[:, np.newaxis])
         # Create datasets for values
-        r_ds = sim.create_dataset("r", shape=(Nt_save, N), dtype=np.complex64)
+        r_ds = sim.create_dataset("r", shape=(Nt_save, N), dtype=np.complex128)
         F_ds = sim.create_dataset("F", shape=(Nt_save, N), dtype=np.complex64)
         v_ds = sim.create_dataset("v", shape=(Nt_save, N), dtype=np.complex64)
         th_ds = sim.create_dataset("theta", shape=(Nt_save, N))
@@ -170,8 +170,6 @@ def main():
                 tree = KDTree(r, boxsize=[l, L])
                 tree_ref = r.copy()
                 count_rebuild += 1
-
-        print(f"Tree was rebuilt {count_rebuild} times")
 
 
 if __name__ == "__main__":
