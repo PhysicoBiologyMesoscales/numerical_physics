@@ -37,8 +37,7 @@ list_t = list(pcf_grp["t"][()].flatten())
 t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
 list_th = list(pcf_grp["theta"][()].flatten())
 th_slider = pn.widgets.DiscreteSlider(name="Theta", options=list_th)
-list_dth = list(pcf_grp["d_theta"][()].flatten())
-dth_slider = pn.widgets.DiscreteSlider(name="Delta Theta", options=list_dth)
+dth_slider = pn.widgets.DiscreteSlider(name="Delta Theta", options=list_th)
 list_r = list(r)
 rmax_slider = pn.widgets.DiscreteSlider(
     name="Max Radius", value=max(list_r), options=list_r
@@ -46,67 +45,15 @@ rmax_slider = pn.widgets.DiscreteSlider(
 select_cmap = pn.widgets.Select(
     name="Color Map", value="viridis", options=["viridis", "jet", "bwr"]
 )
+vis_max = pn.widgets.EditableFloatSlider(
+    name="Max value", start=0, end=1, step=0.005, value=0.2
+)
 
 
-def plot_particles(d, phi, d_theta):
-    # Positions of the particles
-    x1, y1 = 0, 0  # First particle at the origin
-    x2, y2 = -d * np.sin(phi), d * np.cos(phi)  # Second particle at (distance, 0)
-
-    # First particle's polarity (fixed upward arrow)
-    arrow1_length = 0.2
-    arrow1_angle = np.pi / 2  # 90 degrees in radians
-
-    # Second particle's polarity (rotates with d_theta)
-    arrow2_length = 0.2
-    arrow2_angle = arrow1_angle + d_theta
-
-    # Create particles as circles
-    particle1 = hv.Ellipse(x1, y1, 0.15)
-    particle2 = hv.Ellipse(x2, y2, 0.15)
-
-    # Prepare vector data for polarities
-    vector_data = [
-        (x1, y1 + arrow1_length / 2, arrow1_angle, arrow1_length),
-        (
-            x2 + arrow2_length / 2 * np.cos(arrow2_angle),
-            y2 + arrow2_length / 2 * np.sin(arrow2_angle),
-            arrow2_angle,
-            arrow2_length,
-        ),
-    ]
-
-    # Create vectors for polarities
-    vectors = (
-        hv.VectorField(vector_data)
-        .opts(
-            color="black",
-            line_width=2,
-            arrow_heads=True,
-            xlabel="",
-            ylabel="",
-            xaxis=None,
-            yaxis=None,
-            show_frame=False,
-        )
-        .opts(magnitude=dim("Magnitude").norm() * 0.2, rescale_lengths=False)
-    )
-
-    # Combine all elements
-    plot = (particle1 * particle2 * vectors).opts(
-        width=400,
-        height=400,
-        xlim=(-0.5, 0.5),
-        ylim=(-0.5, 0.5),
-    )
-
-    return plot
-
-
-def plot_data(t_avg, th_avg, dth_avg, t, th, dth, rmax, cmap):
+def plot_data(t_avg, th_avg, dth_avg, t, th, dth, rmax, cmap, vis_max):
     t_idx = list_t.index(t)
     th_idx = list_th.index(th)
-    dth_idx = list_dth.index(dth)
+    dth_idx = list_th.index(dth)
     rmax_idx = list_r.index(rmax)
     _sel = {0: t_idx, 3: th_idx, 4: dth_idx}
 
@@ -132,12 +79,12 @@ def plot_data(t_avg, th_avg, dth_avg, t, th, dth, rmax, cmap):
         width=400,
         height=400,
         yticks=list(np.round(np.linspace(0, r[rmax_idx], 5), decimals=1)),
-        clim=(float(mean_data.min()), float(mean_data.max())),
+        clim=(0, vis_max),
         radial=True,
         radius_inner=0,
         tools=["hover"],
     )
-    return plot + plot_particles(0.3, np.pi / 6, dth)
+    return plot
 
 
 dmap = hv.DynamicMap(
@@ -151,6 +98,7 @@ dmap = hv.DynamicMap(
         dth=dth_slider,
         rmax=rmax_slider,
         cmap=select_cmap,
+        vis_max=vis_max,
     )
 )
 
@@ -184,6 +132,7 @@ app = pn.Row(
             th_slider,
             dth_slider,
             rmax_slider,
+            vis_max,
             select_cmap,
         )
     ),
