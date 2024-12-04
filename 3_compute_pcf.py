@@ -28,12 +28,7 @@ def parse_args():
     )
     parser.add_argument(
         "Nth",
-        help="Number of discretization points on the particle position",
-        type=int,
-    )
-    parser.add_argument(
-        "Ndth",
-        help="Number of discretization points for polarity difference between particles",
+        help="Number of discretization points on the particle orientation",
         type=int,
     )
     return parser.parse_args()
@@ -43,23 +38,23 @@ def main():
     args = parse_args()
     sim_path = args.sim_folder_path
     with h5py.File(join(sim_path, "data.h5py"), "a") as hdf_file:
-        Nt = hdf_file.attrs["Nt"]
-        l = hdf_file.attrs["l"]
-        L = hdf_file.attrs["L"]
+        N = int(hdf_file.attrs["N"])
+        Nt = int(hdf_file.attrs["Nt"])
+        l = float(hdf_file.attrs["l"])
+        L = float(hdf_file.attrs["L"])
 
         sim_data = hdf_file["simulation_data"]
         r = sim_data["r"]
         theta = sim_data["theta"]
 
         # Binning dimensions
-        Nr, Nphi, Nth, Ndth = args.Nr, args.Nphi, args.Nth, args.Ndth
+        Nr, Nphi, Nth = args.Nr, args.Nphi, args.Nth
         rmax = args.r_max
         # Load only cells which are in the given range of interaction
-        dr, dphi, dth, ddth = (
-            rmax / (Nr + 1),
-            2 * np.pi / (Nphi + 1),
-            2 * np.pi / (Nth + 1),
-            2 * np.pi / (Ndth + 1),
+        dr, dphi, dth = (
+            rmax / Nr,
+            2 * np.pi / Nphi,
+            2 * np.pi / Nth,
         )
 
         # Compute bins edges
@@ -67,7 +62,6 @@ def main():
         rdr = ((r_bins[:-1] + r_bins[1:]) / 2) * dr
         phi_bins = np.linspace(0, 2 * np.pi, Nphi + 1)  # Binning phi
         th_bins = np.linspace(0, 2 * np.pi, Nth + 1)  # Binning theta
-        dth_bins = np.linspace(0, 2 * np.pi, Ndth + 1)  # Binning Delta_theta
 
         if "pair_correlation" in hdf_file:
             del hdf_file["pair_correlation"]
@@ -76,11 +70,9 @@ def main():
         pcf_grp.attrs["Nr"] = Nr
         pcf_grp.attrs["Nphi"] = Nphi
         pcf_grp.attrs["Nth"] = Nth
-        pcf_grp.attrs["Ndth"] = Ndth
         pcf_grp.attrs["dr"] = dr
         pcf_grp.attrs["dphi"] = dphi
         pcf_grp.attrs["dth"] = dth
-        pcf_grp.attrs["ddth"] = ddth
         pcf_grp.create_dataset("t", data=sim_data["t"][()])
         pcf_grp.create_dataset(
             "r", data=((r_bins[:-1] + r_bins[1:]) / 2)[:, np.newaxis]
@@ -91,10 +83,7 @@ def main():
         pcf_grp.create_dataset(
             "theta", data=((th_bins[:-1] + th_bins[1:]) / 2)[:, np.newaxis]
         )
-        pcf_grp.create_dataset(
-            "d_theta", data=((dth_bins[:-1] + dth_bins[1:]) / 2)[:, np.newaxis]
-        )
-        pcf = pcf_grp.create_dataset("pcf", shape=(Nt, Nr, Nphi, Nth, Ndth))
+        pcf = pcf_grp.create_dataset("pcf", shape=(Nt, Nr, Nphi, Nth, Nth))
 
         for i in tqdm(list(range(Nt))):
             r_t = r[i]
@@ -117,25 +106,47 @@ def main():
             phi = np.angle(rij / e_t) % (2 * np.pi)
             # Angle of reference particle
             thi = th_t[pairs[:, 0]]
+            # Angle of target particle
+            thj = th_t[pairs[:, 1]]
             # Polarity angle difference
-            thij = (th_t[pairs[:, 1]] - th_t[pairs[:, 0]]) % (2 * np.pi)
+            thij = (thj - thi) % (2 * np.pi)
             # data to bin
-            data = np.stack([dij, phi, thi, thij], axis=-1)
+            data = np.stack([dij, phi, thi, thj], axis=-1)
 
             n_pairs = pairs.shape[0]
 
-            pcf_t = binned_statistic_dd(
+            p_th = binned_statistic_dd(
+                th_t, np.arange(Nth), bins=[th_bins], statistic="count"
+            ).statistic
+            p_th /= N * 2 * np.pi
+
+            N_pairs_t = binned_statistic_dd(
                 data,
                 np.arange(n_pairs),
-                bins=[r_bins, phi_bins, th_bins, dth_bins],
+                bins=[r_bins, phi_bins, th_bins, th_bins],
                 statistic="count",
             ).statistic
 
-            pcf_t /= rdr[:, np.newaxis, np.newaxis, np.newaxis]
-            pcf_t_mean = pcf_t.mean(axis=(0, 1), keepdims=True)
-            pcf_t /= np.where(pcf_t_mean > 0, pcf_t_mean, 1.0)
+            N_pairs_t /= N * (N - 1) / 2
 
-            pcf[i] = pcf_t
+            pcf_th = (
+                L
+                * l
+                / N
+                * N_pairs_t
+                / (
+                    rdr[:, np.newaxis, np.newaxis, np.newaxis]
+                    * p_th[np.newaxis, np.newaxis, :, np.newaxis]
+                    * p_th[np.newaxis, np.newaxis, np.newaxis, :]
+                    * dth**2
+                )
+            )
+
+            # Build pcf as g(r, phi, theta, delta_theta) with delta_theta = theta_j - theta_i
+            i_indices = np.arange(Nth).reshape(-1, 1)  # Column vector for row indices
+            j_indices = np.arange(Nth)  # Row vector for column offsets
+
+            pcf[i] = pcf_th[:, :, i_indices, (i_indices + j_indices) % Nth]
 
             hdf_file.flush()
 
