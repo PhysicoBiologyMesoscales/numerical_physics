@@ -5,7 +5,6 @@ import argparse
 import h5py
 
 from os.path import join
-from holoviews import dim
 
 
 def parse_args():
@@ -46,7 +45,7 @@ select_cmap = pn.widgets.Select(
     name="Color Map", value="viridis", options=["viridis", "jet", "bwr"]
 )
 vis_max = pn.widgets.EditableFloatSlider(
-    name="Max value", start=0, end=1, step=0.005, value=0.2
+    name="Max value", start=1, end=10, step=0.005, value=2
 )
 
 
@@ -74,14 +73,19 @@ def plot_data(t_avg, th_avg, dth_avg, t, th, dth, rmax, cmap, vis_max):
         for i in range(5)
     ]
     data = mean_data[*sel_idx]
-    plot = hv.HeatMap((phi, r[: rmax_idx + 1], data)).opts(
+
+    PHI, R = np.meshgrid(phi, r[: rmax_idx + 1])
+    X = R * np.cos(PHI)
+    Y = R * np.sin(PHI)
+
+    plot = hv.QuadMesh((X, Y, data)).opts(
         cmap=cmap,
         width=400,
         height=400,
         yticks=list(np.round(np.linspace(0, r[rmax_idx], 5), decimals=1)),
+        xlim=(-rmax, rmax),
+        ylim=(-rmax, rmax),
         clim=(0, vis_max),
-        radial=True,
-        radius_inner=0,
         tools=["hover"],
     )
     return plot
