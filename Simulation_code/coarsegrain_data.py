@@ -15,10 +15,10 @@ def parse_args():
         "sim_folder_path", help="Path to folder containing simulation data", type=str
     )
     parser.add_argument(
-        "nx", help="Number of discretization points on x axis", type=int
+        "nth", help="Number of discretization points on theta", type=int
     )
     parser.add_argument(
-        "nth", help="Number of discretization points on theta", type=int
+        "--nx", help="Number of discretization points on x axis", type=int
     )
     return parser.parse_args()
 
@@ -35,6 +35,8 @@ def main():
         Nt = hdf_file.attrs["Nt"]
         # Load discretization parameters; y discretization is fixed by Nx and aspect ratio to get square tiles
         Nx = args.nx
+        if Nx is None:
+            Nx = int(l / 2)
         Ny = int(Nx * asp)
         Nth = args.nth
         dx = l / Nx
