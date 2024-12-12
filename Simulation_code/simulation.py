@@ -7,6 +7,7 @@ from os.path import join
 from shutil import rmtree
 from tqdm import tqdm
 from scipy.spatial import KDTree
+from scipy.stats import binned_statistic_dd
 
 
 def parse_args():
@@ -21,6 +22,11 @@ def parse_args():
     parser.add_argument("k", help="Polarity-Velocity alignment strength", type=float)
     parser.add_argument("h", help="Nematic field intensity", type=float)
     parser.add_argument("t_max", help="Max simulation time", type=float)
+    parser.add_argument(
+        "nth_cg",
+        help="Number of discretization points on theta",
+        type=int,
+    )
     parser.add_argument("--dt", help="Base Time Step", type=float, default=5e-2)
     parser.add_argument(
         "--dt_save",
@@ -65,6 +71,16 @@ def main():
     t_arr = np.arange(0, t_max, dt)
     t_save_arr = np.arange(0, t_max, dt_save)
     Nt_save = len(t_save_arr)
+
+    ## Coarse-graining parameters
+    Nx = int(l / 2)
+    Ny = int(aspectRatio * Nx)
+    Nth = parms.nth_cg
+    dx, dy, dth = l / Nx, L / Ny, 2 * np.pi / Nth
+    # Compute bins edges
+    x_bins = np.linspace(0, l, Nx + 1)  # Binning x
+    y_bins = np.linspace(0, L, Ny + 1)  # Binning y
+    th_bins = np.linspace(0, 2 * np.pi, Nth + 1)
 
     try:
         makedirs(save_path)
@@ -115,13 +131,29 @@ def main():
         sim = h5py_file.create_group("simulation_data")
         sim.attrs["dt_sim"] = dt
         # Create datasets for coordinates
-        sim.create_dataset("t", data=t_save_arr[:, np.newaxis])
-        sim.create_dataset("p_id", data=np.arange(N)[:, np.newaxis])
+        sim.create_dataset("t", data=t_save_arr)
+        sim.create_dataset("p_id", data=np.arange(N))
         # Create datasets for values
         r_ds = sim.create_dataset("r", shape=(Nt_save, N), dtype=np.complex128)
         F_ds = sim.create_dataset("F", shape=(Nt_save, N), dtype=np.complex64)
         v_ds = sim.create_dataset("v", shape=(Nt_save, N), dtype=np.complex64)
         th_ds = sim.create_dataset("theta", shape=(Nt_save, N))
+        # Create group for coarse-grained data
+        cg = h5py_file.create_group("coarse_grained")
+        cg.attrs["Nx"] = Nx
+        cg.attrs["Ny"] = Ny
+        cg.attrs["Nth"] = Nth
+        cg.attrs["dx"] = dx
+        cg.attrs["dy"] = dy
+        cg.attrs["dth"] = dth
+        cg.create_dataset("t", data=t_save_arr)
+        cg.create_dataset("x", data=((x_bins[:-1] + x_bins[1:]) / 2))
+        cg.create_dataset("y", data=((y_bins[:-1] + y_bins[1:]) / 2))
+        cg.create_dataset(
+            "theta", data=((th_bins[:-1] + th_bins[1:]) / 2)[:, np.newaxis]
+        )
+        psi = cg.create_dataset("psi", shape=(Nt_save, Nx, Ny, Nth), dtype=np.float64)
+        F_cg = cg.create_dataset("F", shape=(Nt_save, Nx, Ny, Nth), dtype=np.complex128)
 
         for i, t in enumerate(tqdm(t_arr)):
             ## Compute forces
@@ -148,6 +180,30 @@ def main():
                 F_ds[i // interval_btw_saves] = F[:, 0] + 1j * F[:, 1]
                 v_ds[i // interval_btw_saves] = v[:, 0] + 1j * v[:, 1]
                 th_ds[i // interval_btw_saves] = theta
+                # TODO encapsulate in functions and add pcf computation
+                # Coarse-grain data
+                data = np.stack([*r.T, theta], axis=-1)
+                psi[i // interval_btw_saves] = (
+                    binned_statistic_dd(
+                        data,
+                        0,
+                        bins=[x_bins, y_bins, th_bins],
+                        statistic="count",
+                    ).statistic
+                    / N
+                    / dx
+                    / dy
+                    / dth
+                )
+                F_cg[i // interval_btw_saves] = np.nan_to_num(
+                    binned_statistic_dd(
+                        data,
+                        F[:, 0] + 1j * F[:, 1],
+                        bins=[x_bins, y_bins, th_bins],
+                        statistic="mean",
+                    ).statistic,
+                    nan=0,
+                )
                 h5py_file.flush()
 
             ## Update position
