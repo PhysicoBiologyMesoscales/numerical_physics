@@ -24,7 +24,7 @@ SIM_PATH=out/$PBS_JOBID
 
 asp="${asp:-1.5}"
 N="${N:-100000}"
-phi="${phi:-1.0}$"
+phi="${phi:-1.0}"
 v0="${v0:-3.0}"
 kc="${kc:-3.0}"
 k="${k:-10.0}"
