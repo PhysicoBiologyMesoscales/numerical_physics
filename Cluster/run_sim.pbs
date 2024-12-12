@@ -46,17 +46,17 @@ n_range="${n_range:-0-5}"
 
 t_start=$(date +%s)
 echo $(date +"%T") - Launching simulation...
-python $PBS_O_WORKDIR/numerical_physics/1_simulation.py $asp $N $phi $v0 $kc $k $h $t_max $nth_cg --dt_save $dt_save --save_path $SIM_PATH
+python $PBS_O_WORKDIR/numerical_physics/Simulation_code/simulation.py $asp $N $phi $v0 $kc $k $h $t_max $nth_cg --dt_save $dt_save --save_path $SIM_PATH
 t_end=$(date +%s)
 echo $(date +"%T") - Simulation done ! Elapsed Time: $(($t_end-$t_start)) s
 t_start=$(date +%s)
 echo $(date +"%T") - Computing pcf...
-python $PBS_O_WORKDIR/numerical_physics/3_compute_pcf.py $SIM_PATH $rmax_pcf $nr_pcf $nphi_pcf $nth_pcf
+python $PBS_O_WORKDIR/numerical_physics/Simulation_code/compute_pcf.py $SIM_PATH $rmax_pcf $nr_pcf $nphi_pcf $nth_pcf
 t_end=$(date +%s)
 echo $(date +"%T") - Done ! Elapsed Time: $(($t_end-$t_start)) s
 t_start=$(date +%s)
 echo $(date +"%T") - Computing Fourier coefficients...
-python $PBS_O_WORKDIR/numerical_physics/4_compute_fourier_coefficients.py $SIM_PATH -l $l_range -m $m_range -n $n_range
+python $PBS_O_WORKDIR/numerical_physics/Simulation_code/compute_fourier_coefficients.py $SIM_PATH -l $l_range -m $m_range -n $n_range
 t_end=$(date +%s)
 echo $(date +"%T") - Done ! Elapsed Time: $(($t_end-$t_start)) s
 
