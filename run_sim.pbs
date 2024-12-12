@@ -1,0 +1,64 @@
+#!/bin/bash
+#Torque Configuration
+#PBS -l walltime=20:10:30
+#PBS -l mem=24gb
+#PBS -l nodes=1:ppn=4
+#PBS -q batch
+#PBS -N sim
+#PBS -j oe
+#PBS -o /data/users/nburban/out/logs/sim/
+#PBS -e /data/users/nburban/out/errors/sim/
+
+echo Running on host `hostname`
+echo Time is `date`
+echo Directory is `pwd`
+
+source $PBS_O_WORKDIR/.bashrc
+mamba activate numerical-physics
+
+echo Moving into $TMPDIR
+cd $TMPDIR
+
+mkdir -p out/$PBS_JOBID
+SIM_PATH=out/$PBS_JOBID
+
+asp="${asp:-1.5}"
+N="${N:-100000}"
+phi="${phi:-1.0}$"
+v0="${v0:-3.0}"
+kc="${kc:-3.0}"
+k="${k:-10.0}"
+h="${h:-0.0}"
+
+t_max="${t_max:-500}"
+dt_save="${dt_save:-1}"
+
+nth_cg="${nth_cg:-30}"
+
+rmax_pcf="${rmax_pcf:-5}"
+nr_pcf="${nr_pcf:-40}"
+nphi_pcf="${nphi_pcf:-30}"
+nth_pcf="${nth_pcf:-30}"
+
+l_range="${l_range:-0-10}"
+m_range="${m_range:-0-10}"
+n_range="${n_range:-0-5}"
+
+t_start=$(date +%s)
+echo $(date +"%T") - Launching simulation...
+python $PBS_O_WORKDIR/numerical_physics/1_simulation.py $asp $N $phi $v0 $kc $k $h $t_max $nth_cg --dt_save $dt_save --save_path $SIM_PATH
+t_end=$(date +%s)
+echo $(date +"%T") - Simulation done ! Elapsed Time: $(($t_end-$t_start)) s
+t_start=$(date +%s)
+echo $(date +"%T") - Computing pcf...
+python $PBS_O_WORKDIR/numerical_physics/3_compute_pcf.py $SIM_PATH $rmax_pcf $nr_pcf $nphi_pcf $nth_pcf
+t_end=$(date +%s)
+echo $(date +"%T") - Done ! Elapsed Time: $(($t_end-$t_start)) s
+t_start=$(date +%s)
+echo $(date +"%T") - Computing Fourier coefficients...
+python $PBS_O_WORKDIR/numerical_physics/4_compute_fourier_coefficients.py $SIM_PATH -l $l_range -m $m_range -n $n_range
+t_end=$(date +%s)
+echo $(date +"%T") - Done ! Elapsed Time: $(($t_end-$t_start)) s
+
+
+scp -pr out/$PBS_JOBID nolan@10.40.11.201:E:/Cluster_Sim_Data/out/$SUBMIT_JOB_ID/$PBS_JOBID
