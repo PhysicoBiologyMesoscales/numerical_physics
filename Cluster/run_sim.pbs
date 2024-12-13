@@ -55,10 +55,10 @@ python $PBS_O_WORKDIR/numerical_physics/Simulation_code/compute_pcf.py $SIM_PATH
 t_end=$(date +%s)
 echo $(date +"%T") - Done ! Elapsed Time: $(($t_end-$t_start)) s
 t_start=$(date +%s)
-# echo $(date +"%T") - Computing Fourier coefficients...
-# python $PBS_O_WORKDIR/numerical_physics/Simulation_code/compute_fourier_coefficients.py $SIM_PATH -l $l_range -m $m_range -n $n_range
-# t_end=$(date +%s)
-# echo $(date +"%T") - Done ! Elapsed Time: $(($t_end-$t_start)) s
+echo $(date +"%T") - Computing Fourier coefficients...
+python $PBS_O_WORKDIR/numerical_physics/Simulation_code/compute_fourier_coefficients.py $SIM_PATH -l $l_range -m $m_range -n $n_range
+t_end=$(date +%s)
+echo $(date +"%T") - Done ! Elapsed Time: $(($t_end-$t_start)) s
 
 ssh nolan@10.40.11.201 "if not exist E:\\Cluster_Sim_Data\\out\\$SUBMIT_JOB_ID\\ (mkdir E:\\Cluster_Sim_Data\\out\\$SUBMIT_JOB_ID)"
 
