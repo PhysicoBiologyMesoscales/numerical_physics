@@ -105,16 +105,13 @@ def compute_pcf(r, th, tree, rmax, l, L, N, r_bins, phi_bins, th_bins):
     thj = th[pairs[:, 1]]
     # data to bin
     data = np.stack([dij, phi, thi, thj], axis=-1)
-    n_pairs = pairs.shape[0]
-    p_th = binned_statistic_dd(
-        th, np.arange(N), bins=[th_bins], statistic="count"
-    ).statistic
+    p_th = binned_statistic_dd(th, 0, bins=[th_bins], statistic="count").statistic
     p_th /= N * dth
 
     # Number of pairs in each 'cell' with coordinates (r, phi, theta_i, theta_j)
     N_pairs_t = binned_statistic_dd(
         data,
-        np.arange(n_pairs),
+        0,
         bins=[r_bins, phi_bins, th_bins, th_bins],
         statistic="count",
     ).statistic
