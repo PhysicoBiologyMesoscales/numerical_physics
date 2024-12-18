@@ -31,7 +31,7 @@ k="${k:-10.0}"
 h="${h:-0.0}"
 
 t_max="${t_max:-500}"
-dt_save="${dt_save:-1}"
+dt_save="${dt_save:-10}"
 
 nth_cg="${nth_cg:-30}"
 
