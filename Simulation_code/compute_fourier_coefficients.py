@@ -70,7 +70,7 @@ def main():
                         "rptd,p,t,d",
                         pcf,
                         f2(l * phi),
-                        f1(2 * n * theta),
+                        f1(n * theta),
                         f3(m * theta),
                     )
                 )
