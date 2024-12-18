@@ -121,6 +121,9 @@ def compute_pcf(r, th, tree, rmax, l, L, N, r_bins, phi_bins, th_bins):
     r = (r_bins[:-1] + r_bins[1:]) / 2
     dr = np.diff(r_bins)
 
+    # Avoid errors if no particle is found in given direction
+    p_th = np.where(p_th == 0, 1.0, p_th)
+
     # Pair-correlation function indexed with absolute angles (theta_i, theta_j)
     pcf_th = (
         L
