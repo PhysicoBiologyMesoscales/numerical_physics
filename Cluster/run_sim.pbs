@@ -62,4 +62,4 @@ echo $(date +"%T") - Done ! Elapsed Time: $(($t_end-$t_start)) s
 
 ssh nolan@10.40.11.201 "if not exist E:\\Cluster_Sim_Data\\out\\$SUBMIT_JOB_ID\\ (mkdir E:\\Cluster_Sim_Data\\out\\$SUBMIT_JOB_ID)"
 
-scp -pr out/$PBS_JOBID nolan@10.40.11.201:E:\\Cluster_Sim_Data\\out\\$SUBMIT_JOB_ID\\$PBS_JOBID
+scp -prv out/$PBS_JOBID nolan@10.40.11.201:E:\\Cluster_Sim_Data\\out\\$SUBMIT_JOB_ID\\$PBS_JOBID
