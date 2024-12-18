@@ -149,9 +149,7 @@ def main():
         cg.create_dataset("t", data=t_save_arr)
         cg.create_dataset("x", data=((x_bins[:-1] + x_bins[1:]) / 2))
         cg.create_dataset("y", data=((y_bins[:-1] + y_bins[1:]) / 2))
-        cg.create_dataset(
-            "theta", data=((th_bins[:-1] + th_bins[1:]) / 2)[:, np.newaxis]
-        )
+        cg.create_dataset("theta", data=((th_bins[:-1] + th_bins[1:]) / 2))
         psi = cg.create_dataset("psi", shape=(Nt_save, Nx, Ny, Nth), dtype=np.float64)
         F_cg = cg.create_dataset("F", shape=(Nt_save, Nx, Ny, Nth), dtype=np.complex128)
 

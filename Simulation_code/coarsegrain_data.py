@@ -101,11 +101,9 @@ def main():
         cg_grp.attrs["dy"] = dy
         cg_grp.attrs["dth"] = dth
         cg_grp.create_dataset("t", data=t)
-        cg_grp.create_dataset("x", data=((x_bins[:-1] + x_bins[1:]) / 2)[:, np.newaxis])
-        cg_grp.create_dataset("y", data=((y_bins[:-1] + y_bins[1:]) / 2)[:, np.newaxis])
-        cg_grp.create_dataset(
-            "theta", data=((th_bins[:-1] + th_bins[1:]) / 2)[:, np.newaxis]
-        )
+        cg_grp.create_dataset("x", data=((x_bins[:-1] + x_bins[1:]) / 2))
+        cg_grp.create_dataset("y", data=((y_bins[:-1] + y_bins[1:]) / 2))
+        cg_grp.create_dataset("theta", data=((th_bins[:-1] + th_bins[1:]) / 2))
         cg_grp.create_dataset("psi", data=psi)
         cg_grp.create_dataset("F", data=F_cg)
 

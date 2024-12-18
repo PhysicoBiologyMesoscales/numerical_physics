@@ -56,10 +56,10 @@ def set_hdf_group(hdf_file, t, r_bins, phi_bins, th_bins):
     pcf_grp.attrs["dth"] = dth
 
     pcf_grp.create_dataset("t", data=t)
-    pcf_grp.create_dataset("r", data=r[:, np.newaxis])
-    pcf_grp.create_dataset("rdr", data=(r * dr)[:, np.newaxis])
-    pcf_grp.create_dataset("phi", data=phi[:, np.newaxis])
-    pcf_grp.create_dataset("theta", data=th[:, np.newaxis])
+    pcf_grp.create_dataset("r", data=r)
+    pcf_grp.create_dataset("rdr", data=(r * dr))
+    pcf_grp.create_dataset("phi", data=phi)
+    pcf_grp.create_dataset("theta", data=th)
 
     pcf_grp.create_dataset("pcf", shape=(Nt, Nr, Nphi, Nth, Nth))
 
