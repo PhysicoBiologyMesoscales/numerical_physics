@@ -7,12 +7,14 @@ from os.path import join
 from shutil import rmtree
 from tqdm import tqdm
 from scipy.spatial import KDTree
-from scipy.stats import binned_statistic_dd
+
+from compute_pcf import PCFComputation
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Batch simulation of active particles")
-    parser.add_argument("ar", help="Aspect ratio of simulation area", type=float)
+    parser.add_argument("save_path", help="Path to save images", type=str)
+    parser.add_argument("asp", help="Aspect ratio of simulation area", type=float)
     parser.add_argument(
         "N_max", help="Number of particles for a packing fraction phi=1", type=int
     )
@@ -21,12 +23,8 @@ def parse_args():
     parser.add_argument("kc", help="Interaction force intensity", type=float)
     parser.add_argument("k", help="Polarity-Velocity alignment strength", type=float)
     parser.add_argument("h", help="Nematic field intensity", type=float)
+    parser.add_argument("D", help="Translational noise intensity", type=float)
     parser.add_argument("t_max", help="Max simulation time", type=float)
-    parser.add_argument(
-        "nth_cg",
-        help="Number of discretization points on theta",
-        type=int,
-    )
     parser.add_argument("--dt", help="Base Time Step", type=float, default=5e-2)
     parser.add_argument(
         "--dt_save",
@@ -34,196 +32,223 @@ def parse_args():
         type=float,
         default=0.1,
     )
-    parser.add_argument("--save_path", help="Path to save images", type=str)
+    parser.add_argument(
+        "-v", "--verbose", help="Display information", type=bool, default=False
+    )
     args = parser.parse_args()
     return args
 
 
-def main():
+def hexagonal_tiling(phi, l, L):
+    phi_star = np.pi / 2 / np.sqrt(3)  # Optimal packing fraction
+    D = np.sqrt(phi_star / phi) * 2
+    Nx = int(l / D)
+    Ny = int(L / (np.sqrt(3) * D / 2))
+    x = np.repeat(np.arange(Nx) * D, Ny)
+    x[::2] = (x[::2] + D / 2) % l
+    y = np.tile(np.arange(Ny) * np.sqrt(3) * D / 2, Nx)
+    return np.stack([x, y], axis=-1)
 
-    parms = parse_args()
 
-    # Packing fraction and particle number
-    phi = parms.phi
-    N = int(parms.N_max * phi)
-    # Frame aspect ratio
-    aspectRatio = parms.ar
-    # Frame width
-    l = np.sqrt(parms.N_max * np.pi / aspectRatio)
-    L = aspectRatio * l
-    # Physical parameters
-    v0 = parms.v0  # Propulsion force
-    kc = parms.kc  # Collision force
-    k = parms.k  # Polarity-velocity coupling
-    h = parms.h  # Nematic field intensity
-    dt_save = parms.dt_save
+class Simulation:
+    def __init__(self, save_path, N_max, phi, asp, v0, kc, k, h, D, dt_save, dt, t_max):
+        self.save_path = save_path
+        ## Set all parameters
+        self.phi = phi
+        self.N = int(N_max * phi)
+        self.asp = asp
+        # Frame dimensions are computed as a function of max number of particles. Dimension unit length is one particle radius.
+        self.l = np.sqrt(N_max * np.pi / asp)
+        self.L = asp * self.l
+        self.v0 = v0  # Propulsion velocity
+        self.kc = kc  # Collision force
+        self.k = k  # Polarity-velocity coupling
+        self.h = h  # Nematic field intensity
+        self.D = D  # Translational noise
+        ## Set time intervals
+        self.dt_save = dt_save
+        # dt_max depends on v0 to avoid overshooting in particle collision; value is empirical
+        dt_max = 5e-2 / v0
+        dt = min(dt, dt_max)
+        # Compute frame interval between save points and make sure dt divides dt_save
+        self.interval_btw_saves = int(np.ceil(dt_save / dt))
+        self.dt = dt_save / self.interval_btw_saves
+        self.t_max = t_max
+        self.t_arr = np.arange(0, t_max, dt)
+        self.t_save_arr = np.arange(0, t_max, dt_save)
+        self.Nt_save = len(self.t_save_arr)
+        self.count_rebuild = None
 
-    save_path = parms.save_path
+    def set_hdf_file(self):
+        # Create output directory; remove directory if it already exists
+        try:
+            makedirs(self.save_path)
+        except FileExistsError:
+            rmtree(self.save_path)
+            makedirs(self.save_path)
+        with h5py.File(join(self.save_path, "data.h5py"), "w") as h5py_file:
+            ## Save simulation parameters
+            h5py_file.attrs["N"] = self.N
+            h5py_file.attrs["phi"] = self.phi
+            h5py_file.attrs["l"] = self.l
+            h5py_file.attrs["L"] = self.L
+            h5py_file.attrs["asp"] = self.asp
+            h5py_file.attrs["v0"] = self.v0
+            h5py_file.attrs["k"] = self.k
+            h5py_file.attrs["kc"] = self.kc
+            h5py_file.attrs["h"] = self.h
+            h5py_file.attrs["dt_save"] = self.dt_save
+            h5py_file.attrs["Nt"] = self.Nt_save
+            h5py_file.attrs["t_max"] = self.t_max
+            ## Create group to store simulation results
+            sim = h5py_file.create_group("simulation_data")
+            sim.attrs["dt_sim"] = self.dt
+            # Create datasets for coordinates
+            sim.create_dataset("t", data=self.t_save_arr)
+            sim.create_dataset("p_id", data=np.arange(self.N))
+            # Create datasets for values
+            self.r_ds = sim.create_dataset(
+                "r", shape=(self.Nt_save, self.N), dtype=np.complex128
+            )
+            self.F_ds = sim.create_dataset(
+                "F", shape=(self.Nt_save, self.N), dtype=np.complex64
+            )
+            self.v_ds = sim.create_dataset(
+                "v", shape=(self.Nt_save, self.N), dtype=np.complex64
+            )
+            self.th_ds = sim.create_dataset("theta", shape=(self.Nt_save, self.N))
 
-    # dt_max depends on v0 to avoid overshooting in particle collision; value is empirical
-    dt_max = 5e-2 / v0
-    dt = min(parms.dt, dt_max)
-    # Compute frame interval between save points and make sure dt divides dt_save
-    interval_btw_saves = int(np.ceil(dt_save / dt))
-    dt = dt_save / interval_btw_saves
+    def initial_fields(self):
+        r = np.random.uniform(0, self.l, size=self.N) + 1j * np.random.uniform(
+            0, self.L, size=self.N
+        )
+        # theta = np.random.uniform(0, 2 * np.pi, size=N)
+        theta = np.random.normal(0, 0.5, self.N)
+        # Initialize tree
+        tree = KDTree(np.stack([r.real, r.imag], axis=-1), boxsize=[self.l, self.L])
+        tree_ref = r.copy()
+        self.count_rebuild = 0
+        return r, theta, tree, tree_ref
 
-    t_max = parms.t_max
-    t_arr = np.arange(0, t_max, dt)
-    t_save_arr = np.arange(0, t_max, dt_save)
-    Nt_save = len(t_save_arr)
-
-    ## Coarse-graining parameters
-    Nx = int(l / 2)
-    Ny = int(aspectRatio * Nx)
-    Nth = parms.nth_cg
-    dx, dy, dth = l / Nx, L / Ny, 2 * np.pi / Nth
-    # Compute bins edges
-    x_bins = np.linspace(0, l, Nx + 1)  # Binning x
-    y_bins = np.linspace(0, L, Ny + 1)  # Binning y
-    th_bins = np.linspace(0, 2 * np.pi, Nth + 1)
-
-    try:
-        makedirs(save_path)
-    except FileExistsError:
-        rmtree(save_path)
-        makedirs(save_path)
-
-    # Set initial values for fields
-    r = np.random.uniform([0, 0], [l, L], size=(N, 2))
-    theta = np.random.uniform(0, 2 * np.pi, size=N)
-
-    # Initialize tree
-    tree = KDTree(r, boxsize=[l, L])
-    tree_ref = r.copy()
-
-    def compute_forces(r, tree: KDTree):
-        F = np.zeros((N, 2))
+    def get_interacting_pairs(self, r, tree: KDTree):
         pairs = tree.query_pairs(2.0, output_type="ndarray")
         rij = r[pairs[:, 1]] - r[pairs[:, 0]]
-        rij[:, 0] = np.where(rij[:, 0] > l / 2, rij[:, 0] - l, rij[:, 0])
-        rij[:, 0] = np.where(rij[:, 0] < -l / 2, l + rij[:, 0], rij[:, 0])
-        rij[:, 1] = np.where(rij[:, 1] > L / 2, rij[:, 1] - L, rij[:, 1])
-        rij[:, 1] = np.where(rij[:, 1] < -L / 2, L + rij[:, 1], rij[:, 1])
-        dij = np.linalg.norm(rij, axis=1, keepdims=True)
+        rij = np.where(rij.real > self.l / 2, rij - self.l, rij)
+        rij = np.where(rij.real < -self.l / 2, self.l + rij, rij)
+        rij = np.where(rij.imag > self.L / 2, rij - 1j * self.L, rij)
+        rij = np.where(rij.imag < -self.L / 2, 1j * self.L + rij, rij)
+        dij = np.abs(rij)
+        return pairs, rij, dij
+
+    def compute_forces(self, pairs, rij, dij):
+        F = np.zeros(self.N, dtype=np.complex128)
         dij = np.where(dij == 0, 1.0, dij)
         uij = rij / dij
-        np.add.at(F, pairs[:, 0], -kc * (2 * uij - rij))
-        np.add.at(F, pairs[:, 1], kc * (2 * uij - rij))
+        np.add.at(F, pairs[:, 0], -self.kc * (2 * uij - rij))
+        np.add.at(F, pairs[:, 1], self.kc * (2 * uij - rij))
         return F
 
-    count_rebuild = 0
+    def sim_step(self, r, theta, F):
+        v = self.v0 * (np.exp(1j * theta) + F)
+        # Gaussian white noise
+        xi = np.sqrt(2 * self.dt) * np.random.normal(size=self.N)
+        # Translational noise
+        eta = np.sqrt(2 * self.D * self.dt) * (
+            np.random.normal(scale=np.sqrt(2) / 2, size=self.N)
+            + 1j * np.random.normal(scale=np.sqrt(2) / 2, size=self.N)
+        )
+        ## Update position
+        r += self.dt * v + eta
+        # Periodic BC
+        r.real %= self.l
+        r.imag %= self.L
 
-    with h5py.File(join(save_path, "data.h5py"), "w") as h5py_file:
-        ## Save simulation parameters
-        h5py_file.attrs["N"] = N
-        h5py_file.attrs["phi"] = phi
-        h5py_file.attrs["l"] = l
-        h5py_file.attrs["L"] = L
-        h5py_file.attrs["asp"] = aspectRatio
-        h5py_file.attrs["v0"] = v0
-        h5py_file.attrs["k"] = k
-        h5py_file.attrs["kc"] = kc
-        h5py_file.attrs["h"] = h
-        h5py_file.attrs["dt"] = dt_save
-        h5py_file.attrs["Nt"] = Nt_save
-        h5py_file.attrs["t_max"] = t_max
-        ## Create group to store simulation results
-        sim = h5py_file.create_group("simulation_data")
-        sim.attrs["dt_sim"] = dt
-        # Create datasets for coordinates
-        sim.create_dataset("t", data=t_save_arr)
-        sim.create_dataset("p_id", data=np.arange(N))
-        # Create datasets for values
-        r_ds = sim.create_dataset("r", shape=(Nt_save, N), dtype=np.complex128)
-        F_ds = sim.create_dataset("F", shape=(Nt_save, N), dtype=np.complex64)
-        v_ds = sim.create_dataset("v", shape=(Nt_save, N), dtype=np.complex64)
-        th_ds = sim.create_dataset("theta", shape=(Nt_save, N))
-        # Create group for coarse-grained data
-        cg = h5py_file.create_group("coarse_grained")
-        cg.attrs["Nx"] = Nx
-        cg.attrs["Ny"] = Ny
-        cg.attrs["Nth"] = Nth
-        cg.attrs["dx"] = dx
-        cg.attrs["dy"] = dy
-        cg.attrs["dth"] = dth
-        cg.create_dataset("t", data=t_save_arr)
-        cg.create_dataset("x", data=((x_bins[:-1] + x_bins[1:]) / 2))
-        cg.create_dataset("y", data=((y_bins[:-1] + y_bins[1:]) / 2))
-        cg.create_dataset("theta", data=((th_bins[:-1] + th_bins[1:]) / 2))
-        psi = cg.create_dataset("psi", shape=(Nt_save, Nx, Ny, Nth), dtype=np.float64)
-        F_cg = cg.create_dataset("F", shape=(Nt_save, Nx, Ny, Nth), dtype=np.complex128)
+        ## Update orientation
+        theta += (
+            self.dt
+            * (-self.h * np.sin(2 * theta) + self.k * (F * np.exp(-1j * theta)).imag)
+            + xi
+        )
+        theta %= 2 * np.pi
+        return r, theta
 
-        for i, t in enumerate(tqdm(t_arr)):
-            ## Compute forces
-            F = compute_forces(r, tree)
-            # Velocity = v0*(e + F)
-            v = v0 * (
-                np.stack(
-                    [
-                        np.cos(theta),
-                        np.sin(theta),
-                    ],
-                    axis=-1,
-                )
-                + F
+    def update_tree(self, r, tree, tree_ref):
+        # Check if tree needs rebuilding
+        disp = r - tree_ref
+        disp.real = abs(disp.real)
+        disp.imag = abs(disp.imag)
+        disp = np.where(disp.real > self.l / 2, self.l - disp, disp)
+        disp = np.where(disp.imag > self.L / 2, 1j * self.L - disp, disp)
+        # Update tree if at least one particle moved one radius away from its ref position
+        if np.max(np.abs(disp)) > 1.0:
+            tree = KDTree(np.stack([r.real, r.imag], axis=-1), boxsize=[self.l, self.L])
+            tree_ref = r.copy()
+            self.count_rebuild += 1
+        return tree, tree_ref
+
+    def save_data(self, r, theta, F, save_idx, h5py_file):
+        sim = h5py_file["simulation_data"]
+        sim["r"][save_idx] = r
+        sim["theta"][save_idx] = theta
+        sim["F"][save_idx] = F
+
+    def run_sim(self):
+        r, theta, tree, tree_ref = self.initial_fields()
+        with h5py.File(join(self.save_path, "data.h5py"), "a") as hdf_file:
+            pcf = PCFComputation(2.0, 1.0, 20, 30, 30, hdf_file=hdf_file)
+            pcf.compute_bins()
+            pcf.set_hdf_group()
+            # Temp arrays to store pcf statistics at each time step
+            _N_pairs = np.zeros(
+                (self.interval_btw_saves, pcf.Nr, pcf.Nphi, pcf.Nth, pcf.Nth)
             )
-            # Gaussian white noise
-            xi = np.sqrt(2 * dt) * np.random.randn(N)
-            ## Compute angular dynamics
-            e_perp = np.stack([-np.sin(theta), np.cos(theta)], axis=-1)
-
-            ## Save data before position/orientation update
-            if i % interval_btw_saves == 0:
-                r_ds[i // interval_btw_saves] = r[:, 0] + 1j * r[:, 1]
-                F_ds[i // interval_btw_saves] = F[:, 0] + 1j * F[:, 1]
-                v_ds[i // interval_btw_saves] = v[:, 0] + 1j * v[:, 1]
-                th_ds[i // interval_btw_saves] = theta
-                # TODO encapsulate in functions and add pcf computation
-                # Coarse-grain data
-                data = np.stack([*r.T, theta], axis=-1)
-                psi[i // interval_btw_saves] = (
-                    binned_statistic_dd(
-                        data,
-                        0,
-                        bins=[x_bins, y_bins, th_bins],
-                        statistic="count",
-                    ).statistic
-                    / N
-                    / dx
-                    / dy
-                    / dth
+            _p_th = np.zeros((self.interval_btw_saves, pcf.Nth))
+            for t_idx, t in enumerate(tqdm(self.t_arr)):
+                # Find pairs and compute forces
+                pairs, rij, dij = self.get_interacting_pairs(r, tree)
+                F = self.compute_forces(pairs, rij, dij)
+                # Store pcf data in temp arrays
+                _N_pairs[t_idx % self.interval_btw_saves] = pcf.find_pairs(
+                    r, theta, tree
                 )
-                F_cg[i // interval_btw_saves] = np.nan_to_num(
-                    binned_statistic_dd(
-                        data,
-                        F[:, 0] + 1j * F[:, 1],
-                        bins=[x_bins, y_bins, th_bins],
-                        statistic="mean",
-                    ).statistic,
-                    nan=0,
-                )
-                h5py_file.flush()
+                _p_th[t_idx % self.interval_btw_saves] = pcf.compute_p_th(theta)
+                # Check if data needs saving
+                if t_idx % self.interval_btw_saves == 0:
+                    save_idx = t_idx // self.interval_btw_saves
+                    # Save simulation data
+                    self.save_data(r, theta, F, save_idx, hdf_file)
+                    # Save pcf data averaged over all timesteps
+                    pcf.set_data(_N_pairs.mean(axis=0), _p_th.mean(axis=0), save_idx)
+                    hdf_file.flush()
+                # Perform simulation step
+                r, theta = self.sim_step(r, theta, F)
+                # Update tree if needed
+                tree, tree_ref = self.update_tree(r, tree, tree_ref)
+            # Compute average pcf between t=1.0 and t=t_max
+            pcf.compute_pcf(1.0, self.t_max)
+            hdf_file.flush()
 
-            ## Update position
-            r += dt * v
-            # Periodic BC
-            r %= np.array([l, L])
 
-            ## Update orientation
-            theta += (
-                dt * (-h * np.sin(2 * theta) + k * np.einsum("ij, ij->i", F, e_perp))
-                + xi
-            )
-            theta %= 2 * np.pi
-
-            # Check if tree needs rebuilding
-            disp = abs(r - tree_ref)
-            disp[:, 0] = np.where(disp[:, 0] > l / 2, l - disp[:, 0], disp[:, 0])
-            disp[:, 1] = np.where(disp[:, 1] > L / 2, L - disp[:, 1], disp[:, 1])
-            if np.max(np.linalg.norm(disp, axis=1)) > 1.0:
-                tree = KDTree(r, boxsize=[l, L])
-                tree_ref = r.copy()
-                count_rebuild += 1
+def main():
+    parms = parse_args()
+    sim = Simulation(
+        parms.save_path,
+        parms.N_max,
+        parms.phi,
+        parms.asp,
+        parms.v0,
+        parms.kc,
+        parms.k,
+        parms.h,
+        parms.D,
+        parms.dt_save,
+        parms.dt,
+        parms.t_max,
+    )
+    sim.set_hdf_file()
+    sim.run_sim()
+    if parms.verbose:
+        print(f"Tree was rebuilt {sim.count_rebuild} times")
 
 
 if __name__ == "__main__":

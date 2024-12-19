@@ -3,7 +3,7 @@ import argparse
 import h5py
 
 from scipy.spatial import KDTree
-from scipy.stats import binned_statistic_dd
+from scipy.stats import binned_statistic, binned_statistic_dd
 from tqdm import tqdm
 from os.path import join
 
@@ -31,165 +31,162 @@ def parse_args():
         help="Number of discretization points on the particle orientation",
         type=int,
     )
+    parser.add_argument("t_min", help="Start time to compute pcf", type=float)
     return parser.parse_args()
 
 
-def set_hdf_group(hdf_file, t, r_bins, phi_bins, th_bins):
-    if "pair_correlation" in hdf_file:
-        del hdf_file["pair_correlation"]
+class PCFComputation:
+    def __init__(
+        self,
+        rmax: float,
+        rint: float,
+        Nr: int,
+        Nphi: int,
+        Nth: int,
+        hdf_file: h5py.File,
+    ):
+        self.rmax = rmax
+        self.rint = rint
+        self.Nr = Nr
+        self.Nphi = Nphi
+        self.Nth = Nth
+        self.hdf_file = hdf_file
+        self.Nt = hdf_file.attrs["Nt"]
+        self.l = hdf_file.attrs["l"]
+        self.L = hdf_file.attrs["L"]
+        self.N = hdf_file.attrs["N"]
+        self.t = hdf_file["simulation_data"]["t"][()]
+        self.compute_bins()
 
-    Nt = len(t)
-    r = (r_bins[:-1] + r_bins[1:]) / 2
-    phi = (phi_bins[:-1] + phi_bins[1:]) / 2
-    th = (th_bins[:-1] + th_bins[1:]) / 2
-    dr = np.diff(r_bins)
-    Nr = len(r)
-    Nphi, Nth = len(phi), len(th)
-    dphi, dth = 2 * np.pi / Nphi, 2 * np.pi / Nth
-
-    pcf_grp = hdf_file.create_group("pair_correlation")
-
-    pcf_grp.attrs["Nr"] = Nr
-    pcf_grp.attrs["Nphi"] = Nphi
-    pcf_grp.attrs["Nth"] = Nth
-    pcf_grp.attrs["dphi"] = dphi
-    pcf_grp.attrs["dth"] = dth
-
-    pcf_grp.create_dataset("t", data=t)
-    pcf_grp.create_dataset("r", data=r)
-    pcf_grp.create_dataset("rdr", data=(r * dr))
-    pcf_grp.create_dataset("phi", data=phi)
-    pcf_grp.create_dataset("theta", data=th)
-
-    pcf_grp.create_dataset("pcf", shape=(Nt, Nr, Nphi, Nth, Nth))
-
-
-def compute_bins(rmax, Nr, Nphi, Nth):
-    # Compute bins edges
-    r_bins = np.concatenate(
-        [
-            np.linspace(0, 1.2, 4),
-            np.linspace(1.2 + 1.3 / 10, 2.5, 15),
-            np.linspace(2.5 + (rmax - 2.5) / Nr, rmax, Nr - 19 + 1),
-        ]
-    )
-    # r_bins = np.linspace(0, rmax, Nr + 1)  # Binning r
-    phi_bins = np.linspace(0, 2 * np.pi, Nphi + 1)  # Binning phi
-    th_bins = np.linspace(0, 2 * np.pi, Nth + 1)  # Binning theta
-    return r_bins, phi_bins, th_bins
-
-
-def compute_pcf(r, th, tree, rmax, l, L, N, r_bins, phi_bins, th_bins):
-    """Computes pair-correlation function using input kdtree for particle indexing and user-defined bins.
-    r_bins can have arbitrary spacing, phi_bins and th_bins must be evenly spaced with spacing dphi, dth
-    """
-    dphi = 2 * np.pi / (len(phi_bins) - 1)
-    dth = 2 * np.pi / (len(th_bins) - 1)
-    dth = (np.diff(th_bins) % (2 * np.pi))[0]
-    # Query for in-range pairs
-    pairs = tree.query_pairs(rmax, output_type="ndarray")
-    ## Compute coordinates of each pair
-    rij = r[pairs[:, 1]] - r[pairs[:, 0]]
-    rij = np.where(rij.real > l / 2, rij - l, rij)
-    rij = np.where(rij.real < -l / 2, l + rij, rij)
-    rij = np.where(rij.imag > L / 2, rij - 1j * L, rij)
-    rij = np.where(rij.imag < -L / 2, 1j * L + rij, rij)
-    # Particle-particle distance
-    dij = np.abs(rij)
-    # Azimuthal angle
-    e_t = np.exp(1j * th)[pairs[:, 0]]
-    phi = np.angle(rij / e_t) % (2 * np.pi)
-    # Angle of reference particle
-    thi = th[pairs[:, 0]]
-    # Angle of target particle
-    thj = th[pairs[:, 1]]
-    # data to bin
-    data = np.stack([dij, phi, thi, thj], axis=-1)
-    p_th = binned_statistic_dd(th, 0, bins=[th_bins], statistic="count").statistic
-    p_th /= N * dth
-
-    # Number of pairs in each 'cell' with coordinates (r, phi, theta_i, theta_j)
-    N_pairs_t = binned_statistic_dd(
-        data,
-        0,
-        bins=[r_bins, phi_bins, th_bins, th_bins],
-        statistic="count",
-    ).statistic
-
-    N_pairs_t /= N * (N - 1) / 2
-
-    r = (r_bins[:-1] + r_bins[1:]) / 2
-    dr = np.diff(r_bins)
-
-    # Avoid errors if no particle is found in given direction
-    p_th = np.where(p_th == 0, 1.0, p_th)
-
-    # Pair-correlation function indexed with absolute angles (theta_i, theta_j)
-    pcf_th = (
-        L
-        * l
-        * N_pairs_t
-        / (
-            (r * dr)[:, np.newaxis, np.newaxis, np.newaxis]
-            * p_th[np.newaxis, np.newaxis, :, np.newaxis]
-            * p_th[np.newaxis, np.newaxis, np.newaxis, :]
-            * dphi
-            * dth**2
+    def compute_bins(self):
+        # Compute bins edges
+        self.r_bins = np.concatenate(
+            [
+                np.linspace(0, self.rint, 2),
+                np.linspace(
+                    self.rint + (self.rmax - self.rint) / (self.Nr - 1),
+                    self.rmax,
+                    self.Nr - 1,
+                ),
+            ]
         )
-    )
+        # r_bins = np.linspace(0, rmax, Nr + 1)  # Binning r
+        self.phi_bins = np.linspace(0, 2 * np.pi, self.Nphi + 1)  # Binning phi
+        self.th_bins = np.linspace(0, 2 * np.pi, self.Nth + 1)  # Binning theta
+        self.dr = np.diff(self.r_bins)
+        self.dphi, self.dth = 2 * np.pi / self.Nphi, 2 * np.pi / self.Nth
+        self.r = (self.r_bins[:-1] + self.r_bins[1:]) / 2
+        self.phi = (self.phi_bins[:-1] + self.phi_bins[1:]) / 2
+        self.th = (self.th_bins[:-1] + self.th_bins[1:]) / 2
 
-    # Change indexing of pcf
-    Nth = len(p_th)
-    i_indices = np.arange(Nth).reshape(-1, 1)  # Column vector for row indices
-    j_indices = np.arange(Nth)  # Row vector for column offsets
+    def set_hdf_group(self):
+        if "pair_correlation" in self.hdf_file:
+            del self.hdf_file["pair_correlation"]
 
-    # Pair-correlation function indexed with one absolute angle theta_i and the relative orientation delta_theta = theta_j-theta_i
-    pcf = pcf_th[:, :, i_indices, (i_indices + j_indices) % Nth]
+        pcf_grp = self.hdf_file.create_group("pair_correlation")
 
-    return pcf
+        pcf_grp.attrs["rmax"] = self.rmax
+        pcf_grp.attrs["Nr"] = self.Nr
+        pcf_grp.attrs["Nphi"] = self.Nphi
+        pcf_grp.attrs["Nth"] = self.Nth
+        pcf_grp.attrs["dphi"] = self.dphi
+        pcf_grp.attrs["dth"] = self.dth
+
+        pcf_grp.create_dataset("t", data=self.t)
+        pcf_grp.create_dataset("r", data=self.r)
+        pcf_grp.create_dataset("rdr", data=(self.r * self.dr))
+        pcf_grp.create_dataset("phi", data=self.phi)
+        pcf_grp.create_dataset("theta", data=self.th)
+
+        pcf_grp.create_dataset(
+            "N_pairs", shape=(self.Nt, self.Nr, self.Nphi, self.Nth, self.Nth)
+        )
+        pcf_grp.create_dataset("p_th", shape=(self.Nt, self.Nth))
+        pcf_grp.create_dataset("pcf", shape=(self.Nr, self.Nphi, self.Nth, self.Nth))
+
+    def find_pairs(self, r, th, tree):
+        if tree is None:
+            r_array = np.stack([r.real, r.imag], axis=-1)
+            tree = KDTree(r_array, boxsize=[self.l, self.L])
+        # Query for in-range pairs
+        pairs = tree.query_pairs(self.rmax, output_type="ndarray")
+        ## Compute coordinates of each pair
+        rij = r[pairs[:, 1]] - r[pairs[:, 0]]
+        rij = np.where(rij.real > self.l / 2, rij - self.l, rij)
+        rij = np.where(rij.real < -self.l / 2, self.l + rij, rij)
+        rij = np.where(rij.imag > self.L / 2, rij - 1j * self.L, rij)
+        rij = np.where(rij.imag < -self.L / 2, 1j * self.L + rij, rij)
+        # Particle-particle distance
+        dij = np.abs(rij)
+        # Azimuthal angle
+        e_t = np.exp(1j * th)[pairs[:, 0]]
+        phi = np.angle(rij / e_t) % (2 * np.pi)
+        # Angle of reference particle
+        thi = th[pairs[:, 0]]
+        # Angle of target particle
+        thj = th[pairs[:, 1]]
+        # data to bin
+        data = np.stack([dij, phi, thi, thj], axis=-1)
+        # Number of pairs in each 'cell' with coordinates (r, phi, theta_i, theta_j)
+        N_pairs = binned_statistic_dd(
+            data,
+            0,
+            bins=[self.r_bins, self.phi_bins, self.th_bins, self.th_bins],
+            statistic="count",
+        ).statistic
+        return N_pairs
+
+    def compute_p_th(self, th):
+        p_th = binned_statistic(th, 0, bins=self.th_bins, statistic="count").statistic
+        p_th /= self.N * self.dth
+        return p_th
+
+    def set_data(self, N_pairs, p_th, t_idx):
+        corr = self.hdf_file["pair_correlation"]
+        corr["N_pairs"][t_idx] = N_pairs
+        corr["p_th"][t_idx] = p_th
+
+    def compute_and_save_data(self, t_idx):
+        sim = self.hdf_file["simulation_data"]
+        r = sim["r"][t_idx]
+        th = sim["theta"][t_idx]
+        corr = self.hdf_file["pair_correlation"]
+        corr["N_pairs"][t_idx] = self.find_pairs(r, th, tree=None)
+        corr["p_th"][t_idx] = self.compute_p_th(th)
+
+    def compute_pcf(self, t_min, t_max):
+        t_min_idx = np.argmin(np.abs(self.t - t_min))
+        t_max_idx = np.argmin(np.abs(self.t - t_max))
+        corr = self.hdf_file["pair_correlation"]
+        N_pairs = corr["N_pairs"][t_min_idx:t_max_idx].mean(axis=0)
+        p_th = corr["p_th"][t_min_idx:t_max_idx].mean(axis=0)
+        corr["pcf"][()] = (
+            self.L
+            * self.l
+            * N_pairs
+            / (self.N * (self.N - 1) / 2)
+            / (
+                (self.r * self.dr)[:, np.newaxis, np.newaxis, np.newaxis]
+                * p_th[np.newaxis, np.newaxis, :, np.newaxis]
+                * p_th[np.newaxis, np.newaxis, np.newaxis, :]
+                * self.dphi
+                * self.dth**2
+            )
+        )
 
 
 def main():
     args = parse_args()
     sim_path = args.sim_folder_path
+    Nr, Nphi, Nth = args.Nr, args.Nphi, args.Nth
+    rmax = args.r_max
+    t_min = args.t_min
     with h5py.File(join(sim_path, "data.h5py"), "a") as hdf_file:
-        N = int(hdf_file.attrs["N"])
-        Nt = int(hdf_file.attrs["Nt"])
-        l = float(hdf_file.attrs["l"])
-        L = float(hdf_file.attrs["L"])
-
-        sim_data = hdf_file["simulation_data"]
-        r = sim_data["r"]
-        theta = sim_data["theta"]
-
-        # Binning dimensions
-        Nr, Nphi, Nth = args.Nr, args.Nphi, args.Nth
-        rmax = args.r_max
-
-        r_bins, phi_bins, th_bins = compute_bins(rmax, Nr, Nphi, Nth)
-
-        set_hdf_group(
-            hdf_file,
-            sim_data["t"][()],
-            r_bins,
-            phi_bins,
-            th_bins,
-        )
-        pcf = hdf_file["pair_correlation"]["pcf"]
-
-        for i in tqdm(list(range(Nt))):
-            r_t = r[i]
-            th_t = theta[i]
-            ## Build KDTree for efficient nearest-neighbour search
-            pos = np.stack([r_t.real, r_t.imag], axis=-1)
-            pos %= [l, L]
-            tree = KDTree(pos, boxsize=[l, L])
-
-            pcf[i] = compute_pcf(
-                r_t, th_t, tree, rmax, l, L, N, r_bins, phi_bins, th_bins
-            )
-
-            hdf_file.flush()
+        pcf = PCFComputation(rmax, 1.0, Nr, Nphi, Nth, hdf_file)
+        pcf.set_hdf_group()
+        for t_idx, t in enumerate(pcf.t):
+            pcf.compute_and_save_data(t_idx)
+        pcf.compute_pcf(t_min, pcf.t[-1])
 
 
 if __name__ == "__main__":
