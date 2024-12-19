@@ -24,6 +24,8 @@ sim_path = parms.sim_folder_path
 hdf_file = h5py.File(join(sim_path, "data.h5py"), "r")
 pcf_grp = hdf_file["pair_correlation"]
 pcf = pcf_grp["pcf"][()]
+if len(pcf.shape) == 4:
+    pcf = pcf[np.newaxis, ...]
 r = pcf_grp["r"][()].flatten()
 phi = pcf_grp["phi"][()].flatten()
 
@@ -32,7 +34,9 @@ t_avg_checkbox = pn.widgets.Checkbox(name="Time Average", value=True)
 th_avg_checkbox = pn.widgets.Checkbox(name="Theta Average", value=True)
 dth_avg_checkbox = pn.widgets.Checkbox(name="Delta Theta Average")
 
-list_t = list(pcf_grp["t"][()].flatten())
+list_t = [0]
+if "t" in pcf_grp:
+    list_t = list(pcf_grp["t"][()].flatten())
 t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
 list_th = list(pcf_grp["theta"][()].flatten())
 th_slider = pn.widgets.DiscreteSlider(name="Theta", options=list_th)
