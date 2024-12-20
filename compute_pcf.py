@@ -51,10 +51,10 @@ class PCFComputation:
         self.Nphi = Nphi
         self.Nth = Nth
         self.hdf_file = hdf_file
-        self.Nt = hdf_file.attrs["Nt"]
-        self.l = hdf_file.attrs["l"]
-        self.L = hdf_file.attrs["L"]
-        self.N = hdf_file.attrs["N"]
+        self.Nt = hdf_file.attrs.get("Nt")
+        self.l = hdf_file.attrs.get("l")
+        self.L = hdf_file.attrs.get("L")
+        self.N = hdf_file.attrs.get("N")
         self.t = hdf_file["simulation_data"]["t"][()]
         self.compute_bins()
 
