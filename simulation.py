@@ -88,18 +88,18 @@ class Simulation:
             makedirs(self.save_path)
         with h5py.File(join(self.save_path, "data.h5py"), "w") as h5py_file:
             ## Save simulation parameters
-            h5py_file.attrs["N"] = self.N
-            h5py_file.attrs["phi"] = self.phi
-            h5py_file.attrs["l"] = self.l
-            h5py_file.attrs["L"] = self.L
-            h5py_file.attrs["asp"] = self.asp
-            h5py_file.attrs["v0"] = self.v0
-            h5py_file.attrs["k"] = self.k
-            h5py_file.attrs["kc"] = self.kc
-            h5py_file.attrs["h"] = self.h
-            h5py_file.attrs["dt_save"] = self.dt_save
-            h5py_file.attrs["Nt"] = self.Nt_save
-            h5py_file.attrs["t_max"] = self.t_max
+            h5py_file.attrs.create("N", self.N, dtype=np.uint64)
+            h5py_file.attrs.create("phi", self.phi)
+            h5py_file.attrs.create("l", self.l)
+            h5py_file.attrs.create("L", self.L)
+            h5py_file.attrs.create("asp", self.asp)
+            h5py_file.attrs.create("v0", self.v0)
+            h5py_file.attrs.create("k", self.k)
+            h5py_file.attrs.create("kc", self.kc)
+            h5py_file.attrs.create("h", self.h)
+            h5py_file.attrs.create("dt_save", self.dt_save)
+            h5py_file.attrs.create("Nt", self.Nt_save)
+            h5py_file.attrs.create("t_max", self.t_max)
             ## Create group to store simulation results
             sim = h5py_file.create_group("simulation_data")
             sim.attrs["dt_sim"] = self.dt
