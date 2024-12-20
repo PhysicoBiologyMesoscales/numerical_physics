@@ -85,12 +85,12 @@ class PCFComputation:
 
         pcf_grp = self.hdf_file.create_group("pair_correlation")
 
-        pcf_grp.attrs["rmax"] = self.rmax
-        pcf_grp.attrs["Nr"] = self.Nr
-        pcf_grp.attrs["Nphi"] = self.Nphi
-        pcf_grp.attrs["Nth"] = self.Nth
-        pcf_grp.attrs["dphi"] = self.dphi
-        pcf_grp.attrs["dth"] = self.dth
+        pcf_grp.attrs.create("rmax", self.rmax)
+        pcf_grp.attrs.create("Nr", self.Nr)
+        pcf_grp.attrs.create("Nphi", self.Nphi)
+        pcf_grp.attrs.create("Nth", self.Nth)
+        pcf_grp.attrs.create("dphi", self.dphi)
+        pcf_grp.attrs.create("dth", self.dth)
 
         pcf_grp.create_dataset("t", data=self.t)
         pcf_grp.create_dataset("r", data=self.r)
@@ -160,7 +160,9 @@ class PCFComputation:
         corr = self.hdf_file["pair_correlation"]
         N_pairs = corr["N_pairs"][t_min_idx:t_max_idx].mean(axis=0)
         p_th = corr["p_th"][t_min_idx:t_max_idx].mean(axis=0)
-        corr["pcf"][()] = (
+
+        # Pcf indexed with absolute angles of both particles
+        pcf_th = (
             self.L
             * self.l
             * N_pairs
@@ -173,6 +175,12 @@ class PCFComputation:
                 * self.dth**2
             )
         )
+
+        i_indices = np.arange(self.Nth).reshape(-1, 1)  # Column vector for row indices
+        j_indices = np.arange(self.Nth)  # Row vector for column offsets
+
+        # Pair-correlation function indexed with one absolute angle theta_i and the relative orientation delta_theta = theta_j-theta_i
+        corr["pcf"][()] = pcf_th[:, :, i_indices, (i_indices + j_indices) % self.Nth]
 
 
 def main():
