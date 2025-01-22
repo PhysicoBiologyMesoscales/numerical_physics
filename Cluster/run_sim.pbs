@@ -47,7 +47,7 @@ n_range="${n_range:-0-5}"
 
 t_start=$(date +%s)
 echo $(date +"%T") - Launching simulation...
-python $PBS_O_WORKDIR/numerical_physics/simulation.py $SIM_PATH $asp $N $phi $v0 $kc $k $h $D $t_max -dt_save $dt_save
+python $PBS_O_WORKDIR/numerical_physics/simulation.py $SIM_PATH $asp $N $phi $v0 $kc $k $h $D $t_max --dt_save $dt_save
 t_end=$(date +%s)
 echo $(date +"%T") - Simulation done ! Elapsed Time: $(($t_end-$t_start)) s
 # t_start=$(date +%s)
