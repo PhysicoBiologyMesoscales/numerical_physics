@@ -35,6 +35,13 @@ def parse_args():
     parser.add_argument(
         "-v", "--verbose", help="Display information", type=bool, default=False
     )
+    parser.add_argument(
+        "-f",
+        "--force_stationary",
+        help="Force simulation into a stationnary state by aligning initial orientations",
+        type=bool,
+        default=False,
+    )
     args = parser.parse_args()
     return args
 
@@ -51,7 +58,22 @@ def hexagonal_tiling(phi, l, L):
 
 
 class Simulation:
-    def __init__(self, save_path, N_max, phi, asp, v0, kc, k, h, D, dt_save, dt, t_max):
+    def __init__(
+        self,
+        save_path,
+        N_max,
+        phi,
+        asp,
+        v0,
+        kc,
+        k,
+        h,
+        D,
+        dt_save,
+        dt,
+        t_max,
+        force_stat,
+    ):
         self.save_path = save_path
         ## Set all parameters
         self.phi = phi
@@ -78,6 +100,7 @@ class Simulation:
         self.t_save_arr = np.arange(0, t_max, dt_save)
         self.Nt_save = len(self.t_save_arr)
         self.count_rebuild = None
+        self.force_stat = force_stat
 
     def set_hdf_file(self):
         # Create output directory; remove directory if it already exists
@@ -122,8 +145,9 @@ class Simulation:
         r = np.random.uniform(0, self.l, size=self.N) + 1j * np.random.uniform(
             0, self.L, size=self.N
         )
-        # theta = np.random.uniform(0, 2 * np.pi, size=N)
-        theta = np.random.normal(0, 0.5, self.N)
+        theta = np.random.uniform(0, 2 * np.pi, size=self.N)
+        if self.force_stat:
+            theta = np.random.normal(0, 0.5, self.N)
         # Initialize tree
         tree = KDTree(np.stack([r.real, r.imag], axis=-1), boxsize=[self.l, self.L])
         tree_ref = r.copy()
@@ -244,6 +268,7 @@ def main():
         parms.dt_save,
         parms.dt,
         parms.t_max,
+        parms.force_stationary,
     )
     sim.set_hdf_file()
     sim.run_sim()
