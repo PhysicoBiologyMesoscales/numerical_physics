@@ -94,6 +94,7 @@ class PCFComputation:
 
         pcf_grp.create_dataset("t", data=self.t)
         pcf_grp.create_dataset("r", data=self.r)
+        pcf_grp.create_dataset("dr", data=self.dr)
         pcf_grp.create_dataset("rdr", data=(self.r * self.dr))
         pcf_grp.create_dataset("phi", data=self.phi)
         pcf_grp.create_dataset("theta", data=self.th)
