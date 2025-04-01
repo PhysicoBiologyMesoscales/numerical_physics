@@ -63,7 +63,7 @@ def plot_data(t, vis_field, cmap):
         case "random":
             kwargs["clim"] = (0, N)
         case "theta":
-            kwargs["clim"] = (0, np.pi)
+            kwargs["clim"] = (0, 2 * np.pi)
         case "px" | "py":
             kwargs["clim"] = (-1.0, 1.0)
         case "Fx":
@@ -109,7 +109,7 @@ row.servable()
 
 
 def main():
-    anim = hv.HoloMap({t: plot_data(t, "px", "bwr") for t in list_t})
+    anim = hv.HoloMap({t: plot_data(t, "theta", "hsv") for t in list_t})
     hv.save(anim, join(sim_path, "sim.gif"), backend="bokeh", fps=12)
 
 
