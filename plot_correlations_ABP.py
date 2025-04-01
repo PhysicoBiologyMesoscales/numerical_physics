@@ -6,14 +6,17 @@ from itertools import product
 from scipy.fft import fft, ifft, fftfreq, fht, ifht, fhtoffset
 from scipy.special import jv
 from scipy.integrate import quad, quad_vec
-from scipy.signal.windows import hann
+
+from gauss_legendre_quadrature import legendre_integrate
+
+from matplotlib.widgets import Slider
 
 # Matrix size
 n = 2
 N = 2 * n + 1
 
 # Parameters
-kc = 5
+kc = 2
 Pe = 100
 l = 100
 phi = 0.04
@@ -27,51 +30,91 @@ def compute_V(x):
         / np.pi
         * kc
         / 2
-        * (2 - np.abs(x)) ** 2
-        * np.heaviside(2 - np.abs(x), 0)
-        * np.heaviside(np.abs(x), 1)
+        * (2 - x) ** 2
+        * np.heaviside(2 - x, 0)
+        * np.heaviside(x, 1)
     )
 
 
 # In Fourier space
-def compute_U(k):
+def compute_U(k, n_points=100):
     # Works for a radial potential only
-    dx = 1 / np.max(k)
-    r = np.arange(0, 2, dx)
-    U = (
-        2
+    integrand = (
+        lambda r, k: 2
         * np.pi
-        * np.trapz((r * compute_V(r))[None, ...] * jv(0, np.outer(k, r)), x=r, axis=-1)
+        * np.einsum(
+            "r, r... -> r...",
+            r * compute_V(r),
+            jv(0, np.einsum("r,...->r...", r, np.abs(k))),
+        )
     )
-    if len(U) == 1:
-        return U[0]
+    U = legendre_integrate(integrand, n_points, args=(k,))
     return U
+
+
+def compute_passive_pair_correlation(r, n_points=100):
+    integrand = (
+        lambda k, r: 1
+        / 2
+        / np.pi
+        * (k * (1 / (1 + compute_U(k, n_points=1000)) - 1))[..., None]
+        * jv(0, np.outer(k, r))
+        * np.heaviside(k, 1)[..., None]
+    )
+    g = legendre_integrate(integrand, n_points=n_points, args=(r,)) / phi * np.pi + 1
+    return g
 
 
 ## Compute evolution matrices
 
 
+def normalize_w(w, k):
+    _w, _k = [
+        ar.copy()
+        for ar in np.broadcast_arrays(w.flatten()[:, None], k.flatten()[None, :])
+    ]
+    _w *= l * np.abs(_k) * (1 + compute_U(_k))
+    return _w, _k
+
+
 def compute_M(w, k):
-    M = np.zeros((len(k), N, N)).astype(np.complex128)
+    if not isinstance(w, np.ndarray):
+        w = np.array([w])
+    if not isinstance(k, np.ndarray):
+        k = np.array([k])
+
+    match w.shape == k.shape:
+        case False:
+            _w, _k = np.broadcast_arrays(w.flatten()[:, None], k.flatten()[None, :])
+        case _:
+            _w, _k = w, k
+
+    M = np.zeros((_w.shape[0], _k.shape[1], N, N)).astype(np.complex128)
     # Rotational diffusion
-    M += np.diag(np.arange(-n, n + 1) ** 2)[None, ...]
+    M += np.diag(np.arange(-n, n + 1) ** 2)[None, None, ...]
     # Time derivative and diffusion
-    M += np.eye(N)[None, ...] * (1j * w + (l / Pe) ** 2 * np.abs(k) ** 2)[:, None, None]
-    # # # Advection
+    M += (
+        np.eye(N)[None, None, ...]
+        * (1j * _w + (l / Pe) ** 2 * np.abs(_k) ** 2)[..., None, None]
+    )
+    # Advection
     M += (
         1j
         * l
         / 2
-        * np.diag(np.ones(N - 1), 1)[None, ...]
-        * np.conjugate(k)[:, None, None]
+        * np.diag(np.ones(N - 1), 1)[None, None, ...]
+        * np.conjugate(_k)[..., None, None]
     )
-    M += 1j * l / 2 * np.diag(np.ones(N - 1), -1)[None, ...] * k[:, None, None]
+    M += 1j * l / 2 * np.diag(np.ones(N - 1), -1)[None, None, ...] * _k[..., None, None]
     # Pairwise interaction
-    M[:, n, n] += np.abs(k) ** 2 * compute_U(np.abs(k))
+    M[..., n, n] += np.abs(_k) ** 2 * compute_U(_k)
     return M
 
 
 def compute_A(k):
+    if not isinstance(k, np.ndarray):
+        k = np.array([k])
+
     A = np.zeros((len(k), N, N)).astype(np.complex128)
     A += np.diag(np.arange(-n, n + 1) ** 2)[None, ...]
     A += (
@@ -87,14 +130,19 @@ def compute_A(k):
 
 
 def compute_S(w, k):
-    M = compute_M(w, k)
+    _w, _k = normalize_w(w, k)
+    M = compute_M(_w, _k)
     A = compute_A(k)
     M_inv = np.linalg.inv(M)
     # S = (M^-1).A.(M^-1)^H
     S = np.einsum(
-        "kij, kjl, klm->kim", M_inv, A, np.conjugate(M_inv.transpose(0, 2, 1))
+        "wkij, kjl, wklm->wkim", M_inv, A, np.conjugate(M_inv.transpose(0, 1, 3, 2))
     )
     return S
+
+
+# def compute_S(w, k):
+#     return 1 / (1 + np.outer(w, np.abs(k)) ** 2)
 
 
 def integrate_S(k):
@@ -110,36 +158,87 @@ def integrate_S(k):
 
 ## Main
 
-Nk = 64
-Nphi = 32
-k_length = np.logspace(-1, 1, Nk, base=10)
-k_angle = np.linspace(0, 2 * np.pi, Nphi)
+Nk = 32
+Nphi = 16
+k_length = np.logspace(-2, 1, Nk, base=10)
+k_angle = np.linspace(0, 2 * np.pi * (1 - 1 / Nphi), Nphi)
 k = np.outer(k_length, np.exp(1j * k_angle)).flatten()
-S = quad_vec(compute_S, -np.inf, np.inf, args=(k,))[0]
 
+Sint_unnorm = 1 / 2 / np.pi * legendre_integrate(compute_S, 100, args=(k,), axis=0)
+Sint = np.einsum(
+    "k, knm->knm",
+    l * np.abs(k),
+    Sint_unnorm,
+)
 
-theta = np.exp(1j * np.outer(np.arange(-n, n + 1), k_angle))
-corr = np.einsum("knm,ni,mj->kij", S, theta, 1 / theta)
-corr_r_th = corr.reshape((Nk, Nphi, Nphi, Nphi)).sum(axis=-1) * 2 * np.pi / Nphi
+# S = 1 / 2 / np.pi * legendre_integrate(compute_S, n_points=100, args=(k,), axis=0)
+
+theta = np.exp(-1j * np.outer(np.arange(-n, n + 1), k_angle))
+corr = (2 * np.pi**2 / phi) * np.einsum("knm,ni,mj->kij", Sint, theta, 1 / theta)
+corr_r_th = corr.reshape((Nk, Nphi, Nphi, Nphi)).sum(axis=-1) / Nphi
 
 i_indices = np.arange(Nphi).reshape(-1, 1)  # Column vector for row indices
 j_indices = np.arange(Nphi)  # Row vector for column offsets
 
 corr_r_phi = np.real(
-    corr_r_th[:, (i_indices + j_indices) % Nphi, i_indices].sum(axis=-1)
-    * 2
-    * np.pi
-    / Nphi
+    corr_r_th[:, (i_indices + j_indices) % Nphi, i_indices].sum(axis=-1) / Nphi
 )
 
+# # rho_corr = S[..., n, n].reshape((Nw, Nk, Nphi))
+import matplotlib
+
+matplotlib.use("TkAgg")
 kk, pp = np.meshgrid(k_length, k_angle, indexing="ij")
 
+X, Y = kk * np.cos(pp), kk * np.sin(pp)
 
-fig, ax = plt.subplots(subplot_kw={"projection": "polar"})
-mesh = ax.pcolormesh(pp, kk, np.real(corr_r_phi))
-ax.set_ylim((0, 10))
+fig = plt.figure()
+ax_re = fig.add_axes([0, 0, 0.8, 1], projection="3d")  # <-- 3D plot axis
 
-fig.colorbar(mesh)
+ax_re.plot_surface(X, Y, corr_r_phi, cmap=plt.cm.YlGnBu_r)
 
-# TODO Facteur 2 ??
-# TODO L'intégration avec quad est très lente... Il vautdrait mieux donner des valeurs explicites pour theta, peut-être en logspace?
+# ax_sl = fig.add_axes([0.1, 0.85, 0.8, 0.1])
+
+# slide = Slider(ax_sl, r"$\omega$", -1, 1, valstep=x)
+
+
+# def on_change(val):
+#     i = list(x).index(val)
+#     ax_re.cla()
+#     # ax_im.cla()
+#     ax_re.plot_surface(X, Y, S[i], cmap=plt.cm.YlGnBu_r)
+#     # ax_im.plot_surface(X, Y, np.imag(rho_corr[i]))
+#     # plt.show()
+
+
+# slide.on_changed(on_change)
+
+plt.show()
+
+
+# # corr_diff = corr_r_phi - 1 / (1 + compute_U(k_length))[:, None]
+
+# # # np.save(r"D:\2_Numerical\Data\Correlations\S.npy", S)
+# # # np.save(r"D:\2_Numerical\Data\Correlations\corr_r_phi.npy", corr_r_phi)
+
+# # # S = np.load(r"D:\2_Numerical\Data\Correlations\S.npy")
+# # # corr_r_phi = np.load(r"D:\2_Numerical\Data\Correlations\corr_r_phi.npy")
+
+# # import matplotlib
+
+# # matplotlib.use("TkAgg")
+# # kk, pp = np.meshgrid(k_length, k_angle, indexing="ij")
+
+# # X, Y = kk * np.cos(pp), kk * np.sin(pp)
+
+# # fig = plt.figure()
+# # ax = fig.add_subplot(projection="3d")
+# # ax.plot_surface(X, Y, corr_r_phi, cmap=plt.cm.YlGnBu_r)
+
+# # plt.show()
+
+# # # fig, ax = plt.subplots(subplot_kw={"projection": "polar"})
+# # # mesh = ax.pcolormesh(pp, kk, np.real(corr_r_phi))
+# # # ax.set_ylim((0, 10))
+
+# # # fig.colorbar(mesh)
