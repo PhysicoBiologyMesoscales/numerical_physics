@@ -33,14 +33,19 @@ def parse_args():
         default=0.1,
     )
     parser.add_argument(
-        "-v", "--verbose", help="Display information", type=bool, default=False
+        "-v", "--verbose", help="Display information", action="store_true"
     )
     parser.add_argument(
         "-f",
         "--force_stationary",
         help="Force simulation into a stationnary state by aligning initial orientations",
-        type=bool,
-        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
+        "-ng",
+        "--no_pcf",
+        help="Do not compute pair correlation function",
+        action="store_true",
     )
     args = parser.parse_args()
     return args
@@ -73,6 +78,7 @@ class Simulation:
         dt,
         t_max,
         force_stat,
+        no_pcf,
     ):
         self.save_path = save_path
         ## Set all parameters
@@ -101,6 +107,7 @@ class Simulation:
         self.Nt_save = len(self.t_save_arr)
         self.count_rebuild = None
         self.force_stat = force_stat
+        self.no_pcf = no_pcf
 
     def set_hdf_file(self):
         # Create output directory; remove directory if it already exists
@@ -219,37 +226,43 @@ class Simulation:
     def run_sim(self):
         r, theta, tree, tree_ref = self.initial_fields()
         with h5py.File(join(self.save_path, "data.h5py"), "a") as hdf_file:
-            pcf = PCFComputation(2.0, 1.0, 20, 30, 30, hdf_file=hdf_file)
-            pcf.compute_bins()
-            pcf.set_hdf_group()
-            # Temp arrays to store pcf statistics at each time step
-            _N_pairs = np.zeros(
-                (self.interval_btw_saves, pcf.Nr, pcf.Nphi, pcf.Nth, pcf.Nth)
-            )
-            _p_th = np.zeros((self.interval_btw_saves, pcf.Nth))
+            if not self.no_pcf:
+                pcf = PCFComputation(2.0, 1.0, 20, 30, 30, hdf_file=hdf_file)
+                pcf.compute_bins()
+                pcf.set_hdf_group()
+                # Temp arrays to store pcf statistics at each time step
+                _N_pairs = np.zeros(
+                    (self.interval_btw_saves, pcf.Nr, pcf.Nphi, pcf.Nth, pcf.Nth)
+                )
+                _p_th = np.zeros((self.interval_btw_saves, pcf.Nth))
             for t_idx, t in enumerate(tqdm(self.t_arr)):
                 # Find pairs and compute forces
                 pairs, rij, dij = self.get_interacting_pairs(r, tree)
                 F = self.compute_forces(pairs, rij, dij)
-                # Store pcf data in temp arrays
-                _N_pairs[t_idx % self.interval_btw_saves] = pcf.find_pairs(
-                    r, theta, tree
-                )
-                _p_th[t_idx % self.interval_btw_saves] = pcf.compute_p_th(theta)
+                if not self.no_pcf:
+                    # Store pcf data in temp arrays
+                    _N_pairs[t_idx % self.interval_btw_saves] = pcf.find_pairs(
+                        r, theta, tree
+                    )
+                    _p_th[t_idx % self.interval_btw_saves] = pcf.compute_p_th(theta)
                 # Check if data needs saving
                 if t_idx % self.interval_btw_saves == 0:
                     save_idx = t_idx // self.interval_btw_saves
                     # Save simulation data
                     self.save_data(r, theta, F, save_idx, hdf_file)
-                    # Save pcf data averaged over all timesteps
-                    pcf.set_data(_N_pairs.mean(axis=0), _p_th.mean(axis=0), save_idx)
+                    if not self.no_pcf:
+                        # Save pcf data averaged over all timesteps
+                        pcf.set_data(
+                            _N_pairs.mean(axis=0), _p_th.mean(axis=0), save_idx
+                        )
                     hdf_file.flush()
                 # Perform simulation step
                 r, theta = self.sim_step(r, theta, F)
                 # Update tree if needed
                 tree, tree_ref = self.update_tree(r, tree, tree_ref)
-            # Compute average pcf between t=1.0 and t=t_max
-            pcf.compute_pcf(1.0, self.t_max)
+            if not self.no_pcf:
+                # Compute average pcf between t=1.0 and t=t_max
+                pcf.compute_pcf(1.0, self.t_max)
             hdf_file.flush()
 
 
@@ -269,6 +282,7 @@ def main():
         parms.dt,
         parms.t_max,
         parms.force_stationary,
+        parms.no_pcf,
     )
     sim.set_hdf_file()
     sim.run_sim()
