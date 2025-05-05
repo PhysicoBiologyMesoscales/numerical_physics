@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument("h", help="Nematic field intensity", type=float)
     parser.add_argument("alpha", help="Collision asymmetry", type=float)
     parser.add_argument("D", help="Translational noise intensity", type=float)
+    parser.add_argument("Dr", help="Rotational noise intensity", type=float)
     parser.add_argument("t_max", help="Max simulation time", type=float)
     parser.add_argument("--dt", help="Base Time Step", type=float, default=5e-2)
     parser.add_argument(
@@ -52,17 +53,6 @@ def parse_args():
     return args
 
 
-def hexagonal_tiling(phi, l, L):
-    phi_star = np.pi / 2 / np.sqrt(3)  # Optimal packing fraction
-    D = np.sqrt(phi_star / phi) * 2
-    Nx = int(l / D)
-    Ny = int(L / (np.sqrt(3) * D / 2))
-    x = np.repeat(np.arange(Nx) * D, Ny)
-    x[::2] = (x[::2] + D / 2) % l
-    y = np.tile(np.arange(Ny) * np.sqrt(3) * D / 2, Nx)
-    return np.stack([x, y], axis=-1)
-
-
 class Simulation:
     def __init__(
         self,
@@ -76,6 +66,7 @@ class Simulation:
         h,
         alpha,
         D,
+        Dr,
         dt_save,
         dt,
         t_max,
@@ -88,7 +79,7 @@ class Simulation:
         self.N = int(N_max * phi)
         self.asp = asp
         # Frame dimensions are computed as a function of max number of particles. Dimension unit length is one particle radius.
-        self.l = np.sqrt(N_max * np.pi / asp)
+        self.l = 0.5 * np.sqrt(N_max * np.pi / asp)
         self.L = asp * self.l
         self.v0 = v0  # Propulsion velocity
         self.kc = kc  # Collision force
@@ -96,6 +87,7 @@ class Simulation:
         self.h = h  # Nematic field intensity
         self.alpha = alpha
         self.D = D  # Translational noise
+        self.Dr = Dr
         ## Set time intervals
         self.dt_save = dt_save
         # dt_max depends on v0 to avoid overshooting in particle collision; value is empirical
@@ -130,6 +122,8 @@ class Simulation:
             h5py_file.attrs.create("k", self.k)
             h5py_file.attrs.create("kc", self.kc)
             h5py_file.attrs.create("h", self.h)
+            h5py_file.attrs.create("D", self.D)
+            h5py_file.attrs.create("Dr", self.Dr)
             h5py_file.attrs.create("dt_save", self.dt_save)
             h5py_file.attrs.create("Nt", self.Nt_save)
             h5py_file.attrs.create("t_max", self.t_max)
@@ -165,7 +159,7 @@ class Simulation:
         return r, theta, tree, tree_ref
 
     def get_interacting_pairs(self, r, tree: KDTree):
-        pairs = tree.query_pairs(2.0, output_type="ndarray")
+        pairs = tree.query_pairs(1.0, output_type="ndarray")
         rij = r[pairs[:, 1]] - r[pairs[:, 0]]
         rij = np.where(rij.real > self.l / 2, rij - self.l, rij)
         rij = np.where(rij.real < -self.l / 2, self.l + rij, rij)
@@ -178,8 +172,8 @@ class Simulation:
         F = np.zeros(self.N, dtype=np.complex128)
         dij = np.where(dij == 0, 1.0, dij)
         uij = rij / dij
-        np.add.at(F, pairs[:, 0], -self.kc * (2 * uij - rij))
-        np.add.at(F, pairs[:, 1], self.kc * (2 * uij - rij))
+        np.add.at(F, pairs[:, 0], -self.kc * (uij - rij))
+        np.add.at(F, pairs[:, 1], self.kc * (uij - rij))
         return F
 
     def compute_torques(self, pairs, rij, dij, theta):
@@ -190,7 +184,7 @@ class Simulation:
             C,
             pairs[:, 0],
             -self.k
-            * (2 - dij)
+            * (1 - dij)
             * (1 - self.alpha * np.sin(theta[pairs[:, 0]]))
             * np.sin(phi_ij),
         )
@@ -198,7 +192,7 @@ class Simulation:
             C,
             pairs[:, 1],
             -self.k
-            * (2 - dij)
+            * (1 - dij)
             * (1 - self.alpha * np.sin(theta[pairs[:, 1]]))
             * np.sin(phi_ji),
         )
@@ -207,11 +201,10 @@ class Simulation:
     def sim_step(self, r, theta, F, C):
         v = self.v0 * (np.exp(1j * theta) + F)
         # Gaussian white noise
-        xi = np.sqrt(2 * self.dt) * np.random.normal(size=self.N)
+        xi = np.sqrt(2 * self.Dr * self.dt) * np.random.normal(size=self.N)
         # Translational noise
         eta = np.sqrt(2 * self.D * self.dt) * (
-            np.random.normal(scale=np.sqrt(2) / 2, size=self.N)
-            + 1j * np.random.normal(scale=np.sqrt(2) / 2, size=self.N)
+            np.random.normal(size=self.N) + 1j * np.random.normal(size=self.N)
         )
         ## Update position
         r += self.dt * v + eta
@@ -248,7 +241,7 @@ class Simulation:
         r, theta, tree, tree_ref = self.initial_fields()
         with h5py.File(join(self.save_path, "data.h5py"), "a") as hdf_file:
             if not self.no_pcf:
-                pcf = PCFComputation(2.0, 1.0, 20, 30, 30, hdf_file=hdf_file)
+                pcf = PCFComputation(5.0, 1.0, 20, 30, 30, hdf_file=hdf_file)
                 pcf.compute_bins()
                 pcf.set_hdf_group()
                 # Temp arrays to store pcf statistics at each time step
@@ -301,6 +294,7 @@ def main():
         parms.h,
         parms.alpha,
         parms.D,
+        parms.Dr,
         parms.dt_save,
         parms.dt,
         parms.t_max,
