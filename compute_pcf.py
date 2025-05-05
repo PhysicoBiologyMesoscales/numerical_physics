@@ -193,7 +193,7 @@ def main():
     with h5py.File(join(sim_path, "data.h5py"), "a") as hdf_file:
         pcf = PCFComputation(rmax, 1.0, Nr, Nphi, Nth, hdf_file)
         pcf.set_hdf_group()
-        for t_idx, t in enumerate(pcf.t):
+        for t_idx, t in enumerate(tqdm(pcf.t)):
             pcf.compute_and_save_data(t_idx)
         pcf.compute_pcf(t_min, pcf.t[-1])
 
