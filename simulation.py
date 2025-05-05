@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument("kc", help="Interaction force intensity", type=float)
     parser.add_argument("k", help="Polarity-Velocity alignment strength", type=float)
     parser.add_argument("h", help="Nematic field intensity", type=float)
+    parser.add_argument("alpha", help="Collision asymmetry", type=float)
     parser.add_argument("D", help="Translational noise intensity", type=float)
     parser.add_argument("t_max", help="Max simulation time", type=float)
     parser.add_argument("--dt", help="Base Time Step", type=float, default=5e-2)
@@ -73,6 +74,7 @@ class Simulation:
         kc,
         k,
         h,
+        alpha,
         D,
         dt_save,
         dt,
@@ -92,6 +94,7 @@ class Simulation:
         self.kc = kc  # Collision force
         self.k = k  # Polarity-velocity coupling
         self.h = h  # Nematic field intensity
+        self.alpha = alpha
         self.D = D  # Translational noise
         ## Set time intervals
         self.dt_save = dt_save
@@ -179,7 +182,29 @@ class Simulation:
         np.add.at(F, pairs[:, 1], self.kc * (2 * uij - rij))
         return F
 
-    def sim_step(self, r, theta, F):
+    def compute_torques(self, pairs, rij, dij, theta):
+        C = np.zeros(self.N)
+        phi_ij = np.angle(rij) - theta[pairs[:, 0]]
+        phi_ji = np.angle(-rij) - theta[pairs[:, 1]]
+        np.add.at(
+            C,
+            pairs[:, 0],
+            -self.k
+            * (2 - dij)
+            * (1 - self.alpha * np.sin(theta[pairs[:, 0]]))
+            * np.sin(phi_ij),
+        )
+        np.add.at(
+            C,
+            pairs[:, 1],
+            -self.k
+            * (2 - dij)
+            * (1 - self.alpha * np.sin(theta[pairs[:, 1]]))
+            * np.sin(phi_ji),
+        )
+        return C
+
+    def sim_step(self, r, theta, F, C):
         v = self.v0 * (np.exp(1j * theta) + F)
         # Gaussian white noise
         xi = np.sqrt(2 * self.dt) * np.random.normal(size=self.N)
@@ -195,11 +220,7 @@ class Simulation:
         r.imag %= self.L
 
         ## Update orientation
-        theta += (
-            self.dt
-            * (-self.h * np.sin(2 * theta) + self.k * (F * np.exp(-1j * theta)).imag)
-            + xi
-        )
+        theta += self.dt * (-self.h * np.sin(2 * theta) + C) + xi
         theta %= 2 * np.pi
         return r, theta
 
@@ -239,6 +260,7 @@ class Simulation:
                 # Find pairs and compute forces
                 pairs, rij, dij = self.get_interacting_pairs(r, tree)
                 F = self.compute_forces(pairs, rij, dij)
+                C = self.compute_torques(pairs, rij, dij, theta)
                 if not self.no_pcf:
                     # Store pcf data in temp arrays
                     _N_pairs[t_idx % self.interval_btw_saves] = pcf.find_pairs(
@@ -257,7 +279,7 @@ class Simulation:
                         )
                     hdf_file.flush()
                 # Perform simulation step
-                r, theta = self.sim_step(r, theta, F)
+                r, theta = self.sim_step(r, theta, F, C)
                 # Update tree if needed
                 tree, tree_ref = self.update_tree(r, tree, tree_ref)
             if not self.no_pcf:
@@ -277,6 +299,7 @@ def main():
         parms.kc,
         parms.k,
         parms.h,
+        parms.alpha,
         parms.D,
         parms.dt_save,
         parms.dt,
