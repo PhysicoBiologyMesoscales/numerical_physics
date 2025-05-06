@@ -54,8 +54,8 @@ class PCFComputation:
         self.Nt = hdf_file.attrs.get("Nt")
         self.l = hdf_file.attrs.get("l")
         self.L = hdf_file.attrs.get("L")
-        self.N = hdf_file.attrs.get("N")
-        self.t = hdf_file["simulation_data"]["t"][()]
+        self.N = hdf_file["exp_data"]["N"][()]
+        self.t = hdf_file["exp_data"]["t"][()]
         self.compute_bins()
 
     def compute_bins(self):
@@ -108,7 +108,7 @@ class PCFComputation:
     def find_pairs(self, r, th, tree):
         if tree is None:
             r_array = np.stack([r.real, r.imag], axis=-1)
-            tree = KDTree(r_array, boxsize=[self.l, self.L])
+            tree = KDTree(r_array)
         # Query for in-range pairs
         pairs = tree.query_pairs(self.rmax, output_type="ndarray")
         ## Compute coordinates of each pair
@@ -137,9 +137,9 @@ class PCFComputation:
         ).statistic
         return N_pairs
 
-    def compute_p_th(self, th):
+    def compute_p_th(self, th, N):
         p_th = binned_statistic(th, 0, bins=self.th_bins, statistic="count").statistic
-        p_th /= self.N * self.dth
+        p_th /= N * self.dth
         return p_th
 
     def set_data(self, N_pairs, p_th, t_idx):
@@ -148,26 +148,34 @@ class PCFComputation:
         corr["p_th"][t_idx] = p_th
 
     def compute_and_save_data(self, t_idx):
-        sim = self.hdf_file["simulation_data"]
-        r = sim["r"][t_idx]
-        th = sim["theta"][t_idx]
+        exp_data = self.hdf_file["exp_data"]
+        r = exp_data["r"][t_idx]
+        r = r[~np.isnan(r)]
+        th = exp_data["theta"][t_idx]
+        th = th[~np.isnan(th)]
+        N = exp_data["N"][t_idx]
         corr = self.hdf_file["pair_correlation"]
         corr["N_pairs"][t_idx] = self.find_pairs(r, th, tree=None)
-        corr["p_th"][t_idx] = self.compute_p_th(th)
+        corr["p_th"][t_idx] = self.compute_p_th(th, N)
 
     def compute_pcf(self, t_min, t_max):
         t_min_idx = np.argmin(np.abs(self.t - t_min))
         t_max_idx = np.argmin(np.abs(self.t - t_max))
         corr = self.hdf_file["pair_correlation"]
-        N_pairs = corr["N_pairs"][t_min_idx:t_max_idx].mean(axis=0)
+
+        N_pairs_t = corr["N_pairs"][t_min_idx:]
+        total_pairs = self.N * (self.N - 1) / 2
+        pair_proportion = (N_pairs_t / total_pairs[:, None, None, None, None]).mean(
+            axis=0
+        )
+
         p_th = corr["p_th"][t_min_idx:t_max_idx].mean(axis=0)
 
         # Pcf indexed with absolute angles of both particles
         pcf_th = (
             self.L
             * self.l
-            * N_pairs
-            / (self.N * (self.N - 1) / 2)
+            * pair_proportion
             / (
                 (self.r * self.dr)[:, np.newaxis, np.newaxis, np.newaxis]
                 * p_th[np.newaxis, np.newaxis, :, np.newaxis]
