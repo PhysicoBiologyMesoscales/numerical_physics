@@ -17,7 +17,7 @@ N = 2 * n + 1
 
 # Parameters
 kc = 2
-D = 1.0
+D = 1
 l = 100
 phi = 0.04
 
@@ -25,7 +25,15 @@ phi = 0.04
 ## Define interaction potential
 # In real space
 def compute_V(x):
-    return kc / 2 * (2 - x) ** 2 * np.heaviside(2 - x, 0) * np.heaviside(x, 1)
+    return (
+        phi
+        / np.pi
+        * kc
+        / 2
+        * (2 - x) ** 2
+        * np.heaviside(2 - x, 0)
+        * np.heaviside(x, 1)
+    )
 
 
 # In Fourier space
@@ -130,102 +138,70 @@ def compute_S(w, k):
     return S
 
 
-# ## Main
-
-# Nk = 32
-# Nphi = 16
-# k_length = np.logspace(-2, 1, Nk, base=10)
-# k_angle = np.linspace(0, 2 * np.pi * (1 - 1 / Nphi), Nphi)
-# k = np.outer(k_length, np.exp(1j * k_angle)).flatten()
-
-# Sint_unnorm = 1 / 2 / np.pi * legendre_integrate(compute_S, 50, args=(k,), axis=0)
-# Sint = np.einsum(
-#     "k, knm->knm",
-#     l * np.abs(k),
-#     Sint_unnorm,
-# )
-
-# S = Sint.reshape((Nk, Nphi, N, N))
-
-# Nr = 50
-# rmax = 5
-# r = np.linspace(0, rmax, Nr)
-
-# kr = np.outer(k_length, r)
-# n_arr = np.arange(-n, n + 1)
-# j_arr = np.array([jv(abs(i), kr) for i in n_arr])
+r = np.linspace(0, 5, 100)
 
 
-# dg = np.arange(N)[None, :] - np.arange(N)[:, None]
+# integ = lambda k,r : (np.heaviside(k, 1)*k**2*compute_U(k)/(2*D*k**2+1)/(2+compute_U(k)))[:, None]*jv(1,np.outer(k,r))
 
-# sign_mat = np.sign(np.arange(N)[:, None] + np.arange(N)[None, :] - n - 2)
-# sign_mat = np.where(sign_mat == 0, 1, sign_mat)
-# base_mat = (1j * sign_mat[None, ...] * np.exp(-1j * k_angle)[:, None, None]) ** dg[
-#     None, ...
-# ]
-
-# S_real = np.real(S / base_mat[None, ...])
-
-# S_arr = S_real[..., n]
-
-# fourier_integrand = np.real(
-#     (
-#         1
-#         / (2 * np.pi) ** 2
-#         * (
-#             np.einsum(
-#                 "k,kpn,np,nkr->rpk",
-#                 k_length,
-#                 S_arr - phi / 2 / np.pi**2 * (n_arr == 0)[None, None, :],
-#                 np.exp(1j * np.outer(n_arr, k_angle)),
-#                 j_arr,
-#             )
-#         )
-#     )
-# )
+# S1 = legendre_integrate(integ, 20, args=(r,), axis=0)
 
 
-# # fourier_integrand = (Sint[:, n, n] + 2*)
+# Main
 
-# # # S = 1 / 2 / np.pi * legendre_integrate(compute_S, n_points=100, args=(k,), axis=0)
+Nk = 32
+Nphi = 16
+k_length = np.logspace(-2, 1, Nk, base=10)
+k_angle = np.linspace(0, 2 * np.pi * (1 - 1 / Nphi), Nphi)
+k = np.outer(k_length, np.exp(1j * k_angle)).flatten()
 
-# # theta = np.exp(-1j * np.outer(np.arange(-n, n + 1), k_angle))
-# # corr = (2 * np.pi**2 / phi) * np.einsum("knm,ni,mj->kij", Sint, theta, 1 / theta)
-# # corr_r_th = corr.reshape((Nk, Nphi, Nphi, Nphi)).sum(axis=-1) / Nphi
+Sint_unnorm = 1 / 2 / np.pi * legendre_integrate(compute_S, 50, args=(k,), axis=0)
+Sint = np.einsum(
+    "k, knm->knm",
+    l * np.abs(k),
+    Sint_unnorm,
+)
 
-# # i_indices = np.arange(Nphi).reshape(-1, 1)  # Column vector for row indices
-# # j_indices = np.arange(Nphi)  # Row vector for column offsets
+# S = 1 / 2 / np.pi * legendre_integrate(compute_S, n_points=100, args=(k,), axis=0)
 
-# # corr_r_phi = corr_r_th[..., 0]
+theta = np.exp(-1j * np.outer(np.arange(-n, n + 1), k_angle))
+corr = (2 * np.pi**2 / phi) * np.einsum("knm,ni,mj->kij", Sint, theta, 1 / theta)
+corr_r_th = corr.reshape((Nk, Nphi, Nphi, Nphi)).sum(axis=-1) / Nphi
 
-# # # # rho_corr = S[..., n, n].reshape((Nw, Nk, Nphi))
-# import matplotlib
+i_indices = np.arange(Nphi).reshape(-1, 1)  # Column vector for row indices
+j_indices = np.arange(Nphi)  # Row vector for column offsets
 
-# matplotlib.use("TkAgg")
-# kk, pp = np.meshgrid(r, k_angle, indexing="ij")
+corr_r_phi = corr_r_th[:, (i_indices + j_indices) % Nphi, i_indices].sum(axis=-1) / Nphi
 
-# X, Y = kk * np.cos(pp), kk * np.sin(pp)
+# # rho_corr = S[..., n, n].reshape((Nw, Nk, Nphi))
+import matplotlib
 
-# fig = plt.figure()
-# ax_re = fig.add_axes([0, 0, 0.8, 1], projection="3d")  # <-- 3D plot axis
+matplotlib.use("TkAgg")
+kk, pp = np.meshgrid(k_length, k_angle, indexing="ij")
 
-# ax_re.plot_surface(X, Y, fourier_integrand[..., 0], cmap=plt.cm.YlGnBu_r)
+X, Y = kk * np.cos(pp), kk * np.sin(pp)
+
+fig = plt.figure()
+ax_re = fig.add_axes([0, 0, 0.8, 1], projection="3d")  # <-- 3D plot axis
+
+ax_re.plot_surface(X, Y, np.imag(corr_r_phi), cmap=plt.cm.YlGnBu_r)
+
+plt.show()
 
 # ax_sl = fig.add_axes([0.1, 0.85, 0.8, 0.1])
 
-# slide = Slider(ax_sl, r"$\omega$", -1, 1, valstep=k_length)
+# # slide = Slider(ax_sl, r"$\omega$", -1, 1, valstep=x)
 
 
-# def on_change(val):
-#     i = list(k_length).index(val)
-#     ax_re.cla()
-#     # ax_im.cla()
-#     ax_re.plot_surface(X, Y, fourier_integrand[..., i], cmap=plt.cm.YlGnBu_r)
-#     # ax_im.plot_surface(X, Y, np.imag(rho_corr[i]))
-#     # plt.show()
+# # def on_change(val):
+# #     i = list(x).index(val)
+# #     ax_re.cla()
+# #     # ax_im.cla()
+# #     ax_re.plot_surface(X, Y, S[i], cmap=plt.cm.YlGnBu_r)
+# #     # ax_im.plot_surface(X, Y, np.imag(rho_corr[i]))
+# #     # plt.show()
 
 
-# slide.on_changed(on_change)
+# # slide.on_changed(on_change)
 
 # plt.show()
 
