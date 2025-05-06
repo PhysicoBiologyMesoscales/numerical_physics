@@ -107,6 +107,7 @@ class CoarseGraining:
             cg["psi"][t] = psi
             cg["rho"][t] = rho
             cg["p"][t] = p
+            cg["theta_p"][t] = np.angle(p)
             self.hdf_file.flush()
 
 
