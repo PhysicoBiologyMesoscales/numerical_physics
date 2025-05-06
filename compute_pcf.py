@@ -31,7 +31,12 @@ def parse_args():
         help="Number of discretization points on the particle orientation",
         type=int,
     )
-    parser.add_argument("t_min", help="Start time to compute pcf", type=float)
+    parser.add_argument(
+        "--t_start", "-ts", help="Start time to compute pcf", type=float, default=None
+    )
+    parser.add_argument(
+        "--t_end", "-te", help="End time to compute pcf", type=float, default=None
+    )
     return parser.parse_args()
 
 
@@ -158,18 +163,26 @@ class PCFComputation:
         corr["N_pairs"][t_idx] = self.find_pairs(r, th, tree=None)
         corr["p_th"][t_idx] = self.compute_p_th(th, N)
 
-    def compute_pcf(self, t_min, t_max):
-        t_min_idx = np.argmin(np.abs(self.t - t_min))
-        t_max_idx = np.argmin(np.abs(self.t - t_max))
+    def compute_pcf(self, t_start: float = None, t_max: float = None):
+        match t_start:
+            case None:
+                t_start_idx = None
+            case _:
+                t_start_idx = np.argmin(np.abs(self.t - t_start))
+        match t_max:
+            case None:
+                t_max_idx = None
+            case _:
+                t_max_idx = np.argmin(np.abs(self.t - t_max))
+
         corr = self.hdf_file["pair_correlation"]
 
-        N_pairs_t = corr["N_pairs"][t_min_idx:]
+        N_pairs_t = corr["N_pairs"][t_start_idx:t_max_idx]
         total_pairs = self.N * (self.N - 1) / 2
-        pair_proportion = (N_pairs_t / total_pairs[:, None, None, None, None]).mean(
-            axis=0
-        )
+        pair_proportion = (N_pairs_t / total_pairs[:, *((None,) * 4)]).mean(axis=0)
 
-        p_th = corr["p_th"][t_min_idx:t_max_idx].mean(axis=0)
+        p_th = corr["p_th"][t_start_idx:t_max_idx].mean(axis=0)
+        p_th = np.where(p_th == 0, 1.0, p_th)
 
         # Pcf indexed with absolute angles of both particles
         pcf_th = (
@@ -197,13 +210,13 @@ def main():
     sim_path = args.sim_folder_path
     Nr, Nphi, Nth = args.Nr, args.Nphi, args.Nth
     rmax = args.r_max
-    t_min = args.t_min
+    t_start, t_end = args.t_start, args.t_end
     with h5py.File(join(sim_path, "data.h5py"), "a") as hdf_file:
         pcf = PCFComputation(rmax, 1.0, Nr, Nphi, Nth, hdf_file)
         pcf.set_hdf_group()
         for t_idx, t in enumerate(tqdm(pcf.t)):
             pcf.compute_and_save_data(t_idx)
-        pcf.compute_pcf(t_min, pcf.t[-1])
+        pcf.compute_pcf(t_start, t_end)
 
 
 if __name__ == "__main__":
