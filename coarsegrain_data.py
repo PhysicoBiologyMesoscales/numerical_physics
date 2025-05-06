@@ -26,12 +26,12 @@ def parse_args():
 class CoarseGraining:
     def __init__(self, hdf_file: h5py.File, Nx, Nth):
         self.hdf_file = hdf_file
-        self.N = hdf_file.attrs.get("N")
         self.asp = hdf_file.attrs.get("asp")
         self.l = hdf_file.attrs.get("l")
         self.L = hdf_file.attrs.get("L")
         self.Nt = hdf_file.attrs.get("Nt")
-        self.t = hdf_file["simulation_data"]["t"][()]
+        self.t = hdf_file["exp_data"]["t"][()]
+        self.N = hdf_file["exp_data"]["N"][()]
 
         self.Nx = Nx
         self.Ny = int(self.asp * Nx)
@@ -64,45 +64,50 @@ class CoarseGraining:
             "theta", data=((self.th_bins[:-1] + self.th_bins[1:]) / 2)
         )
         cg_grp.create_dataset("psi", shape=(self.Nt, self.Nx, self.Ny, self.Nth))
+        cg_grp.create_dataset("rho", shape=(self.Nt, self.Nx, self.Ny))
         cg_grp.create_dataset(
-            "F", shape=(self.Nt, self.Nx, self.Ny, self.Nth), dtype=np.complex128
+            "p", shape=(self.Nt, self.Nx, self.Ny), dtype=np.complex128
         )
+        cg_grp.create_dataset("theta_p", shape=(self.Nt, self.Nx, self.Ny))
 
     def coarsegrain_sim(self):
-
+        # Load experimental data
+        data = self.hdf_file["exp_data"]
+        r = data["r"]
+        theta = data["theta"]
+        # Coarse-grained data will be written in cg
         cg = self.hdf_file["coarse_grained"]
 
-        sim_data = self.hdf_file["simulation_data"]
-        r = sim_data["r"]
-        F = sim_data["F"]
-        theta = sim_data["theta"]
+        for t in range(self.Nt):
+            # Remove non-existing particles
+            mask = ~np.isnan(r[t])
+            data = np.stack(
+                [
+                    r[t, mask].real,
+                    r[t, mask].imag,
+                    theta[t, mask],
+                ],
+                axis=-1,
+            )
+            # Count particles in each bin
+            counts = binned_statistic_dd(
+                data,
+                0,
+                bins=[self.x_bins, self.y_bins, self.th_bins],
+                statistic="count",
+            ).statistic
 
-        data = np.stack(
-            [
-                np.broadcast_to(self.t[:, np.newaxis], r.shape).flatten(),
-                r[()].flatten().real,
-                r[()].flatten().imag,
-                theta[()].flatten(),
-            ],
-            axis=-1,
-        )
-
-        stat, bin_edges, binnumber = binned_statistic_dd(
-            data,
-            F[()].flatten(),
-            bins=[self.Nt, self.x_bins, self.y_bins, self.th_bins],
-            statistic="mean",
-            expand_binnumbers=True,
-        )
-        # binnumber starts from 1; get it back to 0
-        binnumber -= 1
-
-        cg["F"][()] = np.nan_to_num(stat, nan=0)
-
-        counts = np.zeros((self.Nt, self.Nx, self.Ny, self.Nth), dtype=np.float64)
-        np.add.at(counts, tuple(binnumber), 1)
-        cg["psi"][()] = counts / self.N / self.dx / self.dy / self.dth
-        self.hdf_file.flush()
+            psi = counts / self.N[t] / self.dx / self.dy / self.dth
+            rho = psi.sum(axis=-1) * self.dth
+            p = (
+                (psi * np.exp(1j * cg["theta"][()])[None, None, :]).sum(axis=-1)
+                * self.dth
+                / np.where(rho == 0, 1.0, rho)
+            )
+            cg["psi"][t] = psi
+            cg["rho"][t] = rho
+            cg["p"][t] = p
+            self.hdf_file.flush()
 
 
 def main():
