@@ -22,62 +22,61 @@ parms = parse_args()
 ## Load data
 sim_path = parms.sim_folder_path
 hdf_file = h5py.File(join(sim_path, "data.h5py"))
-N = hdf_file.attrs["N"]
 asp = hdf_file.attrs["asp"]
-sim_data = hdf_file["simulation_data"]
+data = hdf_file["exp_data"]
+Nmax = data.attrs.get("Nmax")
 
 ## Create widgets
-list_t = list(sim_data["t"][()].flatten())
+list_t = list(data["t"][()].flatten())
 t_slider = pn.widgets.DiscreteSlider(name="t", options=list_t)
 select_visualizer = pn.widgets.Select(
     name="Visualizer",
     value="theta",
-    options=["random", "theta", "px", "py", "Fx", "Fy"],
+    options=["random", "theta", "px", "py"],
 )
 select_cmap = pn.widgets.Select(
-    name="Color Map", value="bwr", options=["viridis", "jet", "blues", "bwr"]
+    name="Color Map", value="hsv", options=["hsv", "viridis", "jet", "bwr"]
 )
 
 # Random color for visualization
-rand_color = np.arange(N)
+rand_color = np.arange(Nmax)
 
 
 def plot_data(t, vis_field, cmap):
     t_idx = list_t.index(t)
 
+    r = data["r"][t_idx]
+    mask = ~np.isnan(r)
+
+    r = r[mask]
+    color = rand_color[mask]
+    theta = data["theta"][t_idx][mask]
+
     coords = np.array(
         [
-            sim_data["r"][t_idx].real,
-            sim_data["r"][t_idx].imag,
-            rand_color,
-            sim_data["theta"][t_idx],
-            np.cos(sim_data["theta"][t_idx]),
-            np.sin(sim_data["theta"][t_idx]),
-            sim_data["F"][t_idx].real,
-            sim_data["F"][t_idx].imag,
+            r.real,
+            r.imag,
+            color,
+            theta,
+            np.cos(theta),
+            np.sin(theta),
         ]
     ).T
 
     kwargs = {}
     match vis_field:
         case "random":
-            kwargs["clim"] = (0, N)
+            kwargs["clim"] = (0, Nmax)
         case "theta":
             kwargs["clim"] = (0, 2 * np.pi)
         case "px" | "py":
             kwargs["clim"] = (-1.0, 1.0)
-        case "Fx":
-            Fmax = float(abs(sim_data["F"][t_idx].real).max())
-            kwargs["clim"] = (-Fmax, Fmax)
-        case "Fy":
-            Fmax = float(abs(sim_data["F"][t_idx].imag).max())
-            kwargs["clim"] = (-Fmax, Fmax)
 
-    plot = hv.Points(coords, vdims=["random", "theta", "px", "py", "Fx", "Fy"]).opts(
+    plot = hv.Points(coords, vdims=["random", "theta", "px", "py"]).opts(
         width=800,
         height=int(asp * 800),
         cmap=cmap,
-        size=np.sqrt(1e5 / N),
+        size=np.sqrt(1e5 / Nmax),
         color=vis_field,
         **kwargs,
     )
