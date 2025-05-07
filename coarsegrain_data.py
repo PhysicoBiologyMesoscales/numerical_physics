@@ -3,8 +3,9 @@ import argparse
 import h5py
 
 from os.path import join
-
 from scipy.stats import binned_statistic_dd
+from scipy.spatial import KDTree
+from tqdm import tqdm
 
 
 def parse_args():
@@ -77,6 +78,16 @@ class CoarseGraining:
         theta = data["theta"]
         # Coarse-grained data will be written in cg
         cg = self.hdf_file["coarse_grained"]
+        # Grid reference points; values on theta are normalized so we can use only one distance measurement
+        x_ref, y_ref, th_ref = np.meshgrid(
+            cg["x"], cg["y"], cg["theta"] * self.dx / self.dth, indexing="ij"
+        )
+        ref_points = np.stack([x_ref.ravel(), y_ref.ravel(), th_ref.ravel()], axis=-1)
+        ref_tree = KDTree(
+            ref_points, boxsize=[1e20, 1e20, 2 * np.pi * self.dx / self.dth]
+        )
+        # Gaussian kernel dimensions
+        sigma_r, sigma_th = 2 * self.dx, 2 * self.dth
 
         for t in range(self.Nt):
             # Remove non-existing particles
@@ -85,25 +96,30 @@ class CoarseGraining:
                 [
                     r[t, mask].real,
                     r[t, mask].imag,
-                    theta[t, mask],
+                    theta[t, mask] * self.dx / self.dth,
                 ],
                 axis=-1,
             )
-            # Count particles in each bin
-            counts = binned_statistic_dd(
-                data,
-                0,
-                bins=[self.x_bins, self.y_bins, self.th_bins],
-                statistic="count",
-            ).statistic
-
-            psi = counts / self.N[t] / self.dx / self.dy / self.dth
+            tree = KDTree(data, boxsize=[1e20, 1e20, 2 * np.pi * self.dx / self.dth])
+            # Compute distance to grid points
+            dist_matrix = tree.sparse_distance_matrix(
+                ref_tree, max_distance=3 * sigma_r
+            )
+            # Create gaussian weight for each particle
+            weights = -0.5 * (dist_matrix.power(2) / sigma_r**2)
+            weights.data = 1 / (2 * np.pi * sigma_r * sigma_th) * np.exp(weights.data)
+            # Sum over all particles to get psi (pdf over position and orientation) for each grid point
+            psi = np.array(1 / self.N[t] * weights.sum(axis=0)).reshape(
+                (self.Nx, self.Ny, self.Nth)
+            )
+            # Compute density and polarity from psi
             rho = psi.sum(axis=-1) * self.dth
             p = (
                 (psi * np.exp(1j * cg["theta"][()])[None, None, :]).sum(axis=-1)
                 * self.dth
                 / np.where(rho == 0, 1.0, rho)
             )
+            # Save data
             cg["psi"][t] = psi
             cg["rho"][t] = rho
             cg["p"][t] = p
