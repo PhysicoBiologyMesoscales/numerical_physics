@@ -1,0 +1,567 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 13.2' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     18540,        557]
+NotebookOptionsPosition[     17473,        530]
+NotebookOutlinePosition[     17913,        547]
+CellTagsIndexPosition[     17870,        544]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+
+Cell[CellGroupData[{
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{
+   RowBox[{"f", "[", 
+    RowBox[{"n_", ",", " ", "m_"}], "]"}], ":=", 
+   RowBox[{"k", "*", 
+    RowBox[{"(", 
+     RowBox[{
+      RowBox[{
+       RowBox[{
+        RowBox[{"-", "\[Omega]"}], "/", 
+        RowBox[{"(", 
+         RowBox[{
+          RowBox[{"\[Beta]", "[", "0", "]"}], 
+          RowBox[{"\[Beta]", "[", "1", "]"}]}], ")"}]}], "*", 
+       RowBox[{"KroneckerDelta", "[", 
+        RowBox[{"n", ",", "1"}], "]"}], "*", 
+       RowBox[{"Exp", "[", 
+        RowBox[{"2", "*", "I", "*", "\[Alpha]"}], "]"}], "*", 
+       RowBox[{"KroneckerDelta", "[", 
+        RowBox[{"n", ",", 
+         RowBox[{"m", "+", "2"}]}], "]"}]}], "+", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"Exp", "[", 
+         RowBox[{"I", "*", "\[Alpha]"}], "]"}], "/", 
+        RowBox[{"\[Beta]", "[", "m", "]"}]}], "*", 
+       RowBox[{"KroneckerDelta", "[", 
+        RowBox[{"n", ",", 
+         RowBox[{"m", "+", "1"}]}], "]"}]}], "-", 
+      RowBox[{
+       RowBox[{"\[Omega]", "/", 
+        RowBox[{"(", 
+         RowBox[{
+          RowBox[{"\[Beta]", "[", "0", "]"}], 
+          RowBox[{"\[Beta]", "[", "1", "]"}]}], ")"}]}], "*", 
+       RowBox[{"(", 
+        RowBox[{
+         RowBox[{"KroneckerDelta", "[", 
+          RowBox[{"n", ",", "1"}], "]"}], "+", 
+         RowBox[{"KroneckerDelta", "[", 
+          RowBox[{"n", ",", 
+           RowBox[{"-", "1"}]}], "]"}]}], ")"}], "*", 
+       RowBox[{"KroneckerDelta", "[", 
+        RowBox[{"n", ",", "m"}], "]"}]}], "+", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"Exp", "[", 
+         RowBox[{
+          RowBox[{"-", "I"}], "*", "\[Alpha]"}], "]"}], "/", 
+        RowBox[{"\[Beta]", "[", "m", "]"}]}], "*", 
+       RowBox[{"KroneckerDelta", "[", 
+        RowBox[{"n", ",", 
+         RowBox[{"m", "-", "1"}]}], "]"}]}], "-", 
+      RowBox[{
+       RowBox[{"\[Omega]", "/", 
+        RowBox[{"(", 
+         RowBox[{
+          RowBox[{"\[Beta]", "[", "0", "]"}], 
+          RowBox[{"\[Beta]", "[", "1", "]"}]}], ")"}]}], "*", 
+       RowBox[{"KroneckerDelta", "[", 
+        RowBox[{"n", ",", 
+         RowBox[{"-", "1"}]}], "]"}], "*", 
+       RowBox[{"Exp", "[", 
+        RowBox[{
+         RowBox[{"-", "2"}], "*", "I", "*", "\[Alpha]"}], "]"}], "*", 
+       RowBox[{"KroneckerDelta", "[", 
+        RowBox[{"n", ",", 
+         RowBox[{"m", "-", "2"}]}], "]"}]}]}], ")"}]}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{"f", "[", 
+  RowBox[{"n", ",", "m"}], "]"}]}], "Input",
+ CellChangeTimes->{{3.9596864318803387`*^9, 3.959686455194256*^9}, {
+  3.959686946334406*^9, 3.9596871029090605`*^9}, {3.959687213822712*^9, 
+  3.959687287002182*^9}, {3.959687900449999*^9, 3.959688107659348*^9}},
+ CellLabel->"In[32]:=",ExpressionUUID->"f8105f27-0ada-4d59-b291-91690d556130"],
+
+Cell[BoxData[
+ RowBox[{"k", " ", 
+  RowBox[{"(", 
+   RowBox[{
+    RowBox[{"-", 
+     FractionBox[
+      RowBox[{
+       SuperscriptBox["\[ExponentialE]", 
+        RowBox[{
+         RowBox[{"-", "2"}], " ", "\[ImaginaryI]", " ", "\[Alpha]"}]], " ", 
+       "\[Omega]", " ", 
+       TemplateBox[{
+         RowBox[{
+           RowBox[{"-", "1"}], ",", "n"}]},
+        "KroneckerDeltaSeq"], " ", 
+       TemplateBox[{
+         RowBox[{
+           RowBox[{
+             RowBox[{"-", "2"}], "+", "m"}], ",", "n"}]},
+        "KroneckerDeltaSeq"]}], 
+      RowBox[{
+       RowBox[{"\[Beta]", "[", "0", "]"}], " ", 
+       RowBox[{"\[Beta]", "[", "1", "]"}]}]]}], "-", 
+    FractionBox[
+     RowBox[{"\[Omega]", " ", 
+      RowBox[{"(", 
+       RowBox[{
+        TemplateBox[{
+          RowBox[{
+            RowBox[{"-", "1"}], ",", "n"}]},
+         "KroneckerDeltaSeq"], "+", 
+        TemplateBox[{
+          RowBox[{"1", ",", "n"}]},
+         "KroneckerDeltaSeq"]}], ")"}], " ", 
+      TemplateBox[{
+        RowBox[{"m", ",", "n"}]},
+       "KroneckerDeltaSeq"]}], 
+     RowBox[{
+      RowBox[{"\[Beta]", "[", "0", "]"}], " ", 
+      RowBox[{"\[Beta]", "[", "1", "]"}]}]], "-", 
+    FractionBox[
+     RowBox[{
+      SuperscriptBox["\[ExponentialE]", 
+       RowBox[{"2", " ", "\[ImaginaryI]", " ", "\[Alpha]"}]], " ", "\[Omega]",
+       " ", 
+      TemplateBox[{
+        RowBox[{"1", ",", "n"}]},
+       "KroneckerDeltaSeq"], " ", 
+      TemplateBox[{
+        RowBox[{
+          RowBox[{"2", "+", "m"}], ",", "n"}]},
+       "KroneckerDeltaSeq"]}], 
+     RowBox[{
+      RowBox[{"\[Beta]", "[", "0", "]"}], " ", 
+      RowBox[{"\[Beta]", "[", "1", "]"}]}]], "+", 
+    FractionBox[
+     RowBox[{
+      SuperscriptBox["\[ExponentialE]", 
+       RowBox[{
+        RowBox[{"-", "\[ImaginaryI]"}], " ", "\[Alpha]"}]], " ", 
+      TemplateBox[{
+        RowBox[{
+          RowBox[{
+            RowBox[{"-", "1"}], "+", "m"}], ",", "n"}]},
+       "KroneckerDeltaSeq"]}], 
+     RowBox[{"\[Beta]", "[", "m", "]"}]], "+", 
+    FractionBox[
+     RowBox[{
+      SuperscriptBox["\[ExponentialE]", 
+       RowBox[{"\[ImaginaryI]", " ", "\[Alpha]"}]], " ", 
+      TemplateBox[{
+        RowBox[{
+          RowBox[{"1", "+", "m"}], ",", "n"}]},
+       "KroneckerDeltaSeq"]}], 
+     RowBox[{"\[Beta]", "[", "m", "]"}]]}], ")"}]}]], "Output",
+ CellChangeTimes->{3.959688077883893*^9, 3.959688108232379*^9},
+ CellLabel->"Out[33]=",ExpressionUUID->"1ba77fde-1d95-4c77-a9ac-3e4b0ec5be5e"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{
+   RowBox[{"G", "[", 
+    RowBox[{"n_", ",", "m_", ",", "0"}], "]"}], ":=", 
+   RowBox[{
+    RowBox[{
+     RowBox[{"KroneckerDelta", "[", 
+      RowBox[{"n", ",", "m"}], "]"}], "/", 
+     RowBox[{"\[Beta]", "[", "n", "]"}]}], "-", 
+    RowBox[{
+     RowBox[{"\[Omega]", "/", 
+      RowBox[{"(", 
+       RowBox[{
+        RowBox[{"\[Beta]", "[", "0", "]"}], 
+        RowBox[{"\[Beta]", "[", "1", "]"}]}], ")"}]}], "*", 
+     RowBox[{"KroneckerDelta", "[", 
+      RowBox[{"n", ",", "0"}], "]"}], "*", 
+     RowBox[{"(", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"Exp", "[", 
+         RowBox[{"I", "*", "\[Alpha]"}], "]"}], "*", 
+        RowBox[{"KroneckerDelta", "[", 
+         RowBox[{"m", ",", 
+          RowBox[{"-", "1"}]}], "]"}]}], "+", 
+       RowBox[{
+        RowBox[{"Exp", "[", 
+         RowBox[{
+          RowBox[{"-", "I"}], "*", "\[Alpha]"}], "]"}], "*", 
+        RowBox[{"KroneckerDelta", "[", 
+         RowBox[{"m", ",", "1"}], "]"}]}]}], ")"}]}]}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"G", "[", 
+    RowBox[{"n_", ",", "m_", ",", "p_"}], "]"}], ":=", 
+   RowBox[{"TensorReduce", "[", 
+    RowBox[{"TensorContract", "[", 
+     RowBox[{
+      RowBox[{"TensorProduct", "[", 
+       RowBox[{
+        RowBox[{"G", "[", 
+         RowBox[{"n", ",", "s", ",", 
+          RowBox[{"p", "-", "1"}]}], "]"}], ",", 
+        RowBox[{"f", "[", 
+         RowBox[{"s", ",", "m"}], "]"}]}], "]"}], ",", 
+      RowBox[{"{", 
+       RowBox[{"2", ",", "4"}], "}"}]}], "]"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{"G", "[", 
+  RowBox[{"n", ",", "m", ",", "1"}], "]"}]}], "Input",
+ CellChangeTimes->{{3.95968646464069*^9, 3.9596864949071417`*^9}, {
+  3.959687111648925*^9, 3.9596872096504555`*^9}, {3.959687295946981*^9, 
+  3.9596873211428165`*^9}, {3.959687382332963*^9, 3.959687430783278*^9}, {
+  3.9596874889339*^9, 3.9596875007113333`*^9}, {3.95968812452975*^9, 
+  3.9596882440138245`*^9}, {3.95968864815217*^9, 3.9596886901457424`*^9}, {
+  3.9596899252031727`*^9, 3.9596899641578255`*^9}, {3.9596901070690527`*^9, 
+  3.9596901407826347`*^9}, {3.95969033621587*^9, 3.9596903620652323`*^9}, {
+  3.959690392277749*^9, 3.959690392436106*^9}},
+ CellLabel->"In[62]:=",ExpressionUUID->"9cd982f3-77aa-4ed1-a0dc-fbf6622d56a1"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"TensorContract", "[", 
+   RowBox[{"k", ",", 
+    RowBox[{"{", 
+     RowBox[{"{", 
+      RowBox[{"2", ",", "4"}], "}"}], "}"}]}], "]"}], " ", 
+  RowBox[{"(", 
+   RowBox[{
+    RowBox[{"-", 
+     FractionBox[
+      RowBox[{
+       SuperscriptBox["\[ExponentialE]", 
+        RowBox[{
+         RowBox[{"-", "2"}], " ", "\[ImaginaryI]", " ", "\[Alpha]"}]], " ", 
+       "\[Omega]", " ", 
+       TemplateBox[{
+         RowBox[{
+           RowBox[{"-", "1"}], ",", "s"}]},
+        "KroneckerDeltaSeq"], " ", 
+       TemplateBox[{
+         RowBox[{
+           RowBox[{
+             RowBox[{"-", "2"}], "+", "m"}], ",", "s"}]},
+        "KroneckerDeltaSeq"]}], 
+      RowBox[{
+       RowBox[{"\[Beta]", "[", "0", "]"}], " ", 
+       RowBox[{"\[Beta]", "[", "1", "]"}]}]]}], "-", 
+    FractionBox[
+     RowBox[{"\[Omega]", " ", 
+      RowBox[{"(", 
+       RowBox[{
+        TemplateBox[{
+          RowBox[{
+            RowBox[{"-", "1"}], ",", "s"}]},
+         "KroneckerDeltaSeq"], "+", 
+        TemplateBox[{
+          RowBox[{"1", ",", "s"}]},
+         "KroneckerDeltaSeq"]}], ")"}], " ", 
+      TemplateBox[{
+        RowBox[{"m", ",", "s"}]},
+       "KroneckerDeltaSeq"]}], 
+     RowBox[{
+      RowBox[{"\[Beta]", "[", "0", "]"}], " ", 
+      RowBox[{"\[Beta]", "[", "1", "]"}]}]], "-", 
+    FractionBox[
+     RowBox[{
+      SuperscriptBox["\[ExponentialE]", 
+       RowBox[{"2", " ", "\[ImaginaryI]", " ", "\[Alpha]"}]], " ", "\[Omega]",
+       " ", 
+      TemplateBox[{
+        RowBox[{"1", ",", "s"}]},
+       "KroneckerDeltaSeq"], " ", 
+      TemplateBox[{
+        RowBox[{
+          RowBox[{"2", "+", "m"}], ",", "s"}]},
+       "KroneckerDeltaSeq"]}], 
+     RowBox[{
+      RowBox[{"\[Beta]", "[", "0", "]"}], " ", 
+      RowBox[{"\[Beta]", "[", "1", "]"}]}]], "+", 
+    FractionBox[
+     RowBox[{
+      SuperscriptBox["\[ExponentialE]", 
+       RowBox[{
+        RowBox[{"-", "\[ImaginaryI]"}], " ", "\[Alpha]"}]], " ", 
+      TemplateBox[{
+        RowBox[{
+          RowBox[{
+            RowBox[{"-", "1"}], "+", "m"}], ",", "s"}]},
+       "KroneckerDeltaSeq"]}], 
+     RowBox[{"\[Beta]", "[", "m", "]"}]], "+", 
+    FractionBox[
+     RowBox[{
+      SuperscriptBox["\[ExponentialE]", 
+       RowBox[{"\[ImaginaryI]", " ", "\[Alpha]"}]], " ", 
+      TemplateBox[{
+        RowBox[{
+          RowBox[{"1", "+", "m"}], ",", "s"}]},
+       "KroneckerDeltaSeq"]}], 
+     RowBox[{"\[Beta]", "[", "m", "]"}]]}], ")"}], " ", 
+  RowBox[{"(", 
+   RowBox[{
+    RowBox[{"-", 
+     FractionBox[
+      RowBox[{"\[Omega]", " ", 
+       TemplateBox[{
+         RowBox[{"0", ",", "n"}]},
+        "KroneckerDeltaSeq"], " ", 
+       RowBox[{"(", 
+        RowBox[{
+         RowBox[{
+          SuperscriptBox["\[ExponentialE]", 
+           RowBox[{"\[ImaginaryI]", " ", "\[Alpha]"}]], " ", 
+          TemplateBox[{
+            RowBox[{
+              RowBox[{"-", "1"}], ",", "s"}]},
+           "KroneckerDeltaSeq"]}], "+", 
+         RowBox[{
+          SuperscriptBox["\[ExponentialE]", 
+           RowBox[{
+            RowBox[{"-", "\[ImaginaryI]"}], " ", "\[Alpha]"}]], " ", 
+          TemplateBox[{
+            RowBox[{"1", ",", "s"}]},
+           "KroneckerDeltaSeq"]}]}], ")"}]}], 
+      RowBox[{
+       RowBox[{"\[Beta]", "[", "0", "]"}], " ", 
+       RowBox[{"\[Beta]", "[", "1", "]"}]}]]}], "+", 
+    FractionBox[
+     TemplateBox[{
+       RowBox[{"n", ",", "s"}]},
+      "KroneckerDeltaSeq"], 
+     RowBox[{"\[Beta]", "[", "n", "]"}]]}], ")"}]}]], "Output",
+ CellChangeTimes->{{3.9596903512960625`*^9, 3.959690362875857*^9}, 
+   3.959690394028451*^9},
+ CellLabel->"Out[64]=",ExpressionUUID->"791c3b85-b930-47e6-99db-7c16883ddd4b"]
+}, Open  ]],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{
+   RowBox[{"restrictedSum", "[", 
+    RowBox[{"e_", ",", 
+     RowBox[{"{", 
+      RowBox[{"{", 
+       RowBox[{"a_", ",", "___"}], "}"}], "}"}], ",", "a_"}], "]"}], ":=", 
+   "e"}], ";"}], "\n", 
+ RowBox[{
+  RowBox[{
+   RowBox[{
+    RowBox[{"restrictedSum", "[", 
+     RowBox[{"e_", ",", 
+      RowBox[{"{", 
+       RowBox[{"l___", ",", 
+        RowBox[{"{", 
+         RowBox[{"a_", ",", "___"}], "}"}], ",", "r___"}], "}"}], ",", "a_"}],
+      "]"}], ":=", 
+    RowBox[{"Sum", "[", 
+     RowBox[{"e", ",", "l", ",", "r"}], "]"}]}], ";"}], 
+  "\n"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"simplifyDelta", "[", "expr_", "]"}], ":=", 
+   RowBox[{"expr", "//.", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"HoldPattern", "[", 
+        RowBox[{"Sum", "[", 
+         RowBox[{
+          RowBox[{"e_", " ", 
+           RowBox[{"KroneckerDelta", "[", 
+            RowBox[{"a_", ",", "b_"}], "]"}]}], ",", "inds__"}], "]"}], "]"}],
+        ":>", 
+       RowBox[{
+        RowBox[{"restrictedSum", "[", 
+         RowBox[{
+          RowBox[{"ReplaceAll", "[", 
+           RowBox[{"e", ",", 
+            RowBox[{"a", "->", "b"}]}], "]"}], ",", 
+          RowBox[{"{", "inds", "}"}], ",", "a"}], "]"}], "/;", 
+        RowBox[{"!", 
+         RowBox[{"FreeQ", "[", 
+          RowBox[{"e", ",", "a"}], "]"}]}]}]}], ",", 
+      RowBox[{
+       RowBox[{"HoldPattern", "[", 
+        RowBox[{"Sum", "[", 
+         RowBox[{
+          RowBox[{"e_", " ", 
+           RowBox[{"KroneckerDelta", "[", 
+            RowBox[{"a_", ",", "b_"}], "]"}]}], ",", "inds__"}], "]"}], "]"}],
+        ":>", 
+       RowBox[{
+        RowBox[{"restrictedSum", "[", 
+         RowBox[{
+          RowBox[{"ReplaceAll", "[", 
+           RowBox[{"e", ",", 
+            RowBox[{"b", "->", "a"}]}], "]"}], ",", 
+          RowBox[{"{", "inds", "}"}], ",", "b"}], "]"}], "/;", 
+        RowBox[{"!", 
+         RowBox[{"FreeQ", "[", 
+          RowBox[{"e", ",", "b"}], "]"}]}]}]}]}], "}"}]}]}], ";"}]}], "Input",
+ CellChangeTimes->{{3.9596868662040586`*^9, 3.9596868662040586`*^9}},
+ CellLabel->"In[5]:=",ExpressionUUID->"50878416-d3d6-479e-8db1-d0f26565d1dc"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"simplifyDelta", "[", 
+  RowBox[{"G", "[", 
+   RowBox[{"n", ",", "m", ",", "1"}], "]"}], "]"}]], "Input",
+ CellChangeTimes->{{3.9596868698204737`*^9, 3.959686877050644*^9}, 
+   3.959687480684826*^9},
+ CellLabel->"In[28]:=",ExpressionUUID->"196781da-5684-40cc-a488-ff8d2cdc2db0"],
+
+Cell[BoxData[
+ RowBox[{
+  UnderscriptBox["\[Sum]", "q"], 
+  RowBox[{"(", 
+   RowBox[{
+    UnderscriptBox["\[Sum]", "s"], 
+    RowBox[{"k", " ", 
+     RowBox[{"(", 
+      RowBox[{
+       RowBox[{
+        SuperscriptBox["\[ExponentialE]", 
+         RowBox[{
+          RowBox[{"-", "\[ImaginaryI]"}], " ", "\[Alpha]"}]], " ", 
+        TemplateBox[{
+          RowBox[{
+            RowBox[{
+              RowBox[{"-", "1"}], "+", "q"}], ",", "s"}]},
+         "KroneckerDeltaSeq"]}], "+", 
+       RowBox[{
+        SuperscriptBox["\[ExponentialE]", 
+         RowBox[{"\[ImaginaryI]", " ", "\[Alpha]"}]], " ", 
+        TemplateBox[{
+          RowBox[{
+            RowBox[{"1", "+", "q"}], ",", "s"}]},
+         "KroneckerDeltaSeq"]}]}], ")"}], " ", 
+     RowBox[{"(", 
+      RowBox[{
+       RowBox[{"-", 
+        FractionBox[
+         RowBox[{"\[Omega]", " ", 
+          TemplateBox[{
+            RowBox[{"0", ",", "n"}]},
+           "KroneckerDeltaSeq"], " ", 
+          RowBox[{"(", 
+           RowBox[{
+            RowBox[{
+             SuperscriptBox["\[ExponentialE]", 
+              RowBox[{"\[ImaginaryI]", " ", "\[Alpha]"}]], " ", 
+             TemplateBox[{
+               RowBox[{
+                 RowBox[{"-", "1"}], ",", "s"}]},
+              "KroneckerDeltaSeq"]}], "+", 
+            RowBox[{
+             SuperscriptBox["\[ExponentialE]", 
+              RowBox[{
+               RowBox[{"-", "\[ImaginaryI]"}], " ", "\[Alpha]"}]], " ", 
+             TemplateBox[{
+               RowBox[{"1", ",", "s"}]},
+              "KroneckerDeltaSeq"]}]}], ")"}]}], 
+         RowBox[{
+          RowBox[{"\[Beta]", "[", "0", "]"}], " ", 
+          RowBox[{"\[Beta]", "[", "1", "]"}]}]]}], "+", 
+       FractionBox[
+        TemplateBox[{
+          RowBox[{"n", ",", "s"}]},
+         "KroneckerDeltaSeq"], 
+        RowBox[{"\[Beta]", "[", "n", "]"}]]}], ")"}], " ", 
+     RowBox[{"(", 
+      RowBox[{
+       RowBox[{"-", 
+        FractionBox[
+         RowBox[{"\[Omega]", " ", 
+          TemplateBox[{
+            RowBox[{"0", ",", "q"}]},
+           "KroneckerDeltaSeq"], " ", 
+          RowBox[{"(", 
+           RowBox[{
+            RowBox[{
+             SuperscriptBox["\[ExponentialE]", 
+              RowBox[{"\[ImaginaryI]", " ", "\[Alpha]"}]], " ", 
+             TemplateBox[{
+               RowBox[{
+                 RowBox[{"-", "1"}], ",", "m"}]},
+              "KroneckerDeltaSeq"]}], "+", 
+            RowBox[{
+             SuperscriptBox["\[ExponentialE]", 
+              RowBox[{
+               RowBox[{"-", "\[ImaginaryI]"}], " ", "\[Alpha]"}]], " ", 
+             TemplateBox[{
+               RowBox[{"1", ",", "m"}]},
+              "KroneckerDeltaSeq"]}]}], ")"}]}], 
+         RowBox[{
+          RowBox[{"\[Beta]", "[", "0", "]"}], " ", 
+          RowBox[{"\[Beta]", "[", "1", "]"}]}]]}], "+", 
+       FractionBox[
+        TemplateBox[{
+          RowBox[{"m", ",", "q"}]},
+         "KroneckerDeltaSeq"], 
+        RowBox[{"\[Beta]", "[", "q", "]"}]]}], ")"}]}]}], ")"}]}]], "Output",
+ CellChangeTimes->{3.9596868774101954`*^9, 3.9596874813789015`*^9, 
+  3.9596875137429843`*^9},
+ CellLabel->"Out[28]=",ExpressionUUID->"6f077e45-4861-41f7-963b-841c1f4a446f"]
+}, Open  ]]
+},
+WindowSize->{1152., 579.6},
+WindowMargins->{{
+  Automatic, -5.399999999999864}, {-5.399999999999977, Automatic}},
+FrontEndVersion->"13.2 for Microsoft Windows (64-bit) (January 30, 2023)",
+StyleDefinitions->"Default.nb",
+ExpressionUUID->"2810991f-88af-40e7-89ee-4dbd0d557299"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[CellGroupData[{
+Cell[580, 22, 2745, 75, 105, "Input",ExpressionUUID->"f8105f27-0ada-4d59-b291-91690d556130"],
+Cell[3328, 99, 2454, 76, 55, "Output",ExpressionUUID->"1ba77fde-1d95-4c77-a9ac-3e4b0ec5be5e"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[5819, 180, 2300, 60, 86, "Input",ExpressionUUID->"9cd982f3-77aa-4ed1-a0dc-fbf6622d56a1"],
+Cell[8122, 242, 3646, 114, 57, "Output",ExpressionUUID->"791c3b85-b930-47e6-99db-7c16883ddd4b"]
+}, Open  ]],
+Cell[11783, 359, 2182, 65, 124, "Input",ExpressionUUID->"50878416-d3d6-479e-8db1-d0f26565d1dc"],
+Cell[CellGroupData[{
+Cell[13990, 428, 301, 6, 28, "Input",ExpressionUUID->"196781da-5684-40cc-a488-ff8d2cdc2db0"],
+Cell[14294, 436, 3163, 91, 60, "Output",ExpressionUUID->"6f077e45-4861-41f7-963b-841c1f4a446f"]
+}, Open  ]]
+}
+]
+*)
+
+(* End of internal cache information *)
+
