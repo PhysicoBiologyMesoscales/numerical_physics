@@ -1,0 +1,843 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* Created By: SaveReadableNotebook *)
+(* https://resources.wolframcloud.com/FunctionRepository/resources/SaveReadableNotebook *)
+
+Notebook[
+ {
+  Cell[
+   CellGroupData[
+    {
+     Cell[
+      BoxData[
+       RowBox[
+        {
+         "Simplify",
+         "[",
+         RowBox[
+          {
+           RowBox[
+            {
+             RowBox[
+              {
+               RowBox[
+                {"1", "/", RowBox[{"(", RowBox[{"2", "*", "Pi"}], ")"}]}
+               ],
+               "*",
+               RowBox[
+                {
+                 "Integrate",
+                 "[",
+                 RowBox[
+                  {
+                   RowBox[
+                    {
+                     RowBox[
+                      {
+                       "(",
+                       RowBox[
+                        {
+                         RowBox[
+                          {
+                           "Dr",
+                           RowBox[
+                            {
+                             "(",
+                             RowBox[
+                              {
+                               RowBox[{"x", "^", "2"}],
+                               "+",
+                               RowBox[{"\[Omega]0", "^", "2"}]
+                              }
+                             ],
+                             ")"
+                            }
+                           ]
+                          }
+                         ],
+                         "+",
+                         RowBox[
+                          {
+                           "D",
+                           "*",
+                           RowBox[{"k", "^", "2"}],
+                           RowBox[
+                            {
+                             "(",
+                             RowBox[
+                              {
+                               RowBox[{"3", RowBox[{"x", "^", "2"}]}],
+                               "+",
+                               RowBox[
+                                {
+                                 "\[Omega]0",
+                                 RowBox[
+                                  {
+                                   "(",
+                                   RowBox[{"\[Omega]0", "-", RowBox[{"2", "\[Omega]1"}]}],
+                                   ")"
+                                  }
+                                 ]
+                                }
+                               ]
+                              }
+                             ],
+                             ")"
+                            }
+                           ]
+                          }
+                         ]
+                        }
+                       ],
+                       ")"
+                      }
+                     ],
+                     "/",
+                     RowBox[
+                      {
+                       "(",
+                       RowBox[
+                        {
+                         RowBox[
+                          {
+                           RowBox[
+                            {
+                             "(",
+                             RowBox[
+                              {RowBox[{"I", " ", "x"}], " ", "+", " ", "\[Omega]0"}
+                             ],
+                             ")"
+                            }
+                           ],
+                           "^",
+                           "3"
+                          }
+                         ],
+                         " ",
+                         "*",
+                         " ",
+                         RowBox[
+                          {
+                           RowBox[
+                            {
+                             "(",
+                             RowBox[
+                              {
+                               RowBox[{RowBox[{"-", "I"}], " ", "x"}],
+                               " ",
+                               "+",
+                               " ",
+                               "\[Omega]0"
+                              }
+                             ],
+                             ")"
+                            }
+                           ],
+                           "^",
+                           "2"
+                          }
+                         ],
+                         " ",
+                         "*",
+                         RowBox[
+                          {
+                           "(",
+                           RowBox[
+                            {
+                             RowBox[{"x", "^", "2"}],
+                             "+",
+                             RowBox[{"\[Omega]1", "^", "2"}]
+                            }
+                           ],
+                           ")"
+                          }
+                         ]
+                        }
+                       ],
+                       ")"
+                      }
+                     ]
+                    }
+                   ],
+                   ",",
+                   " ",
+                   RowBox[
+                    {
+                     "{",
+                     RowBox[
+                      {
+                       "x",
+                       ",",
+                       " ",
+                       RowBox[{"-", "Infinity"}],
+                       ",",
+                       " ",
+                       "Infinity"
+                      }
+                     ],
+                     "}"
+                    }
+                   ]
+                  }
+                 ],
+                 "]"
+                }
+               ]
+              }
+             ],
+             "/.",
+             RowBox[
+              {
+               "{",
+               RowBox[
+                {
+                 RowBox[
+                  {
+                   "\[Omega]0",
+                   "->",
+                   RowBox[{"D", " ", RowBox[{"k", "^", "2"}]}]
+                  }
+                 ],
+                 ",",
+                 " ",
+                 RowBox[
+                  {
+                   "\[Omega]1",
+                   " ",
+                   "->",
+                   " ",
+                   RowBox[
+                    {
+                     RowBox[{"D", "*", RowBox[{"k", "^", "2"}]}],
+                     " ",
+                     "+",
+                     " ",
+                     "Dr"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ],
+               "}"
+              }
+             ]
+            }
+           ],
+           ",",
+           " ",
+           RowBox[
+            {
+             "Assumptions",
+             "->",
+             RowBox[
+              {
+               "{",
+               RowBox[
+                {
+                 RowBox[{"Dr", ">", "0"}],
+                 ",",
+                 " ",
+                 RowBox[{"D", ">", "0"}],
+                 ",",
+                 " ",
+                 RowBox[{"k", ">", "0"}],
+                 ",",
+                 " ",
+                 RowBox[
+                  {
+                   "Element",
+                   "[",
+                   RowBox[
+                    {
+                     RowBox[{"{", RowBox[{"k", ",", "D", ",", "Dr"}], "}"}],
+                     ",",
+                     " ",
+                     "Reals"
+                    }
+                   ],
+                   "]"
+                  }
+                 ]
+                }
+               ],
+               "}"
+              }
+             ]
+            }
+           ]
+          }
+         ],
+         "]"
+        }
+       ]
+      ],
+      "Input"
+     ],
+     Cell[
+      BoxData[
+       RowBox[
+        {
+         "-",
+         FractionBox[
+          "1",
+          RowBox[
+           {
+            "8",
+            " ",
+            SuperscriptBox["D", "2"],
+            " ",
+            SuperscriptBox["k", "4"],
+            " ",
+            RowBox[
+             {
+              "(",
+              RowBox[
+               {
+                "Dr",
+                "+",
+                RowBox[{"2", " ", "D", " ", SuperscriptBox["k", "2"]}]
+               }
+              ],
+              ")"
+             }
+            ]
+           }
+          ]
+         ]
+        }
+       ]
+      ],
+      "Output"
+     ]
+    },
+    Open
+   ]
+  ],
+  Cell[
+   CellGroupData[
+    {
+     Cell[
+      BoxData[
+       RowBox[
+        {
+         "Simplify",
+         "[",
+         RowBox[
+          {
+           RowBox[
+            {
+             RowBox[
+              {
+               RowBox[
+                {"1", "/", RowBox[{"(", RowBox[{"2", "*", "Pi"}], ")"}]}
+               ],
+               "*",
+               RowBox[
+                {
+                 "Integrate",
+                 "[",
+                 RowBox[
+                  {
+                   RowBox[
+                    {
+                     RowBox[
+                      {
+                       "(",
+                       RowBox[
+                        {
+                         RowBox[
+                          {
+                           "Dr",
+                           RowBox[
+                            {
+                             "(",
+                             RowBox[
+                              {RowBox[{RowBox[{"-", "I"}], "*", "x"}], "+", "\[Omega]0"}
+                             ],
+                             ")"
+                            }
+                           ]
+                          }
+                         ],
+                         "+",
+                         RowBox[
+                          {
+                           "D",
+                           "*",
+                           RowBox[{"k", "^", "2"}],
+                           RowBox[
+                            {
+                             "(",
+                             RowBox[
+                              {
+                               RowBox[{RowBox[{"-", "2"}], "*", "I", "*", "x"}],
+                               "+",
+                               "\[Omega]0",
+                               "-",
+                               "\[Omega]1"
+                              }
+                             ],
+                             ")"
+                            }
+                           ]
+                          }
+                         ]
+                        }
+                       ],
+                       ")"
+                      }
+                     ],
+                     "/",
+                     RowBox[
+                      {
+                       "(",
+                       RowBox[
+                        {
+                         RowBox[
+                          {
+                           RowBox[
+                            {
+                             "(",
+                             RowBox[
+                              {RowBox[{"I", " ", "x"}], " ", "+", " ", "\[Omega]0"}
+                             ],
+                             ")"
+                            }
+                           ],
+                           "^",
+                           "2"
+                          }
+                         ],
+                         " ",
+                         "*",
+                         " ",
+                         RowBox[
+                          {
+                           "(",
+                           RowBox[
+                            {
+                             RowBox[{RowBox[{"-", "I"}], " ", "x"}],
+                             " ",
+                             "+",
+                             " ",
+                             "\[Omega]0"
+                            }
+                           ],
+                           ")"
+                          }
+                         ],
+                         " ",
+                         "*",
+                         RowBox[
+                          {
+                           "(",
+                           RowBox[
+                            {
+                             RowBox[{"x", "^", "2"}],
+                             "+",
+                             RowBox[{"\[Omega]1", "^", "2"}]
+                            }
+                           ],
+                           ")"
+                          }
+                         ]
+                        }
+                       ],
+                       ")"
+                      }
+                     ]
+                    }
+                   ],
+                   ",",
+                   " ",
+                   RowBox[
+                    {
+                     "{",
+                     RowBox[
+                      {
+                       "x",
+                       ",",
+                       " ",
+                       RowBox[{"-", "Infinity"}],
+                       ",",
+                       " ",
+                       "Infinity"
+                      }
+                     ],
+                     "}"
+                    }
+                   ]
+                  }
+                 ],
+                 "]"
+                }
+               ]
+              }
+             ],
+             "/.",
+             RowBox[
+              {
+               "{",
+               RowBox[
+                {
+                 RowBox[
+                  {
+                   "\[Omega]0",
+                   "->",
+                   RowBox[{"D", " ", RowBox[{"k", "^", "2"}]}]
+                  }
+                 ],
+                 ",",
+                 " ",
+                 RowBox[
+                  {
+                   "\[Omega]1",
+                   " ",
+                   "->",
+                   " ",
+                   RowBox[
+                    {
+                     RowBox[{"D", "*", RowBox[{"k", "^", "2"}]}],
+                     " ",
+                     "+",
+                     " ",
+                     "Dr"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ],
+               "}"
+              }
+             ]
+            }
+           ],
+           ",",
+           " ",
+           RowBox[
+            {
+             "Assumptions",
+             "->",
+             RowBox[
+              {
+               "{",
+               RowBox[
+                {
+                 RowBox[{"Dr", ">", "0"}],
+                 ",",
+                 " ",
+                 RowBox[{"D", ">", "0"}],
+                 ",",
+                 " ",
+                 RowBox[{"k", ">", "0"}],
+                 ",",
+                 " ",
+                 RowBox[
+                  {
+                   "Element",
+                   "[",
+                   RowBox[
+                    {
+                     RowBox[{"{", RowBox[{"k", ",", "D", ",", "Dr"}], "}"}],
+                     ",",
+                     " ",
+                     "Reals"
+                    }
+                   ],
+                   "]"
+                  }
+                 ]
+                }
+               ],
+               "}"
+              }
+             ]
+            }
+           ]
+          }
+         ],
+         "]"
+        }
+       ]
+      ],
+      "Input"
+     ],
+     Cell[
+      BoxData[
+       RowBox[
+        {
+         "-",
+         FractionBox[
+          "1",
+          RowBox[
+           {
+            RowBox[
+             {"4", " ", "D", " ", "Dr", " ", SuperscriptBox["k", "2"]}
+            ],
+            "+",
+            RowBox[
+             {
+              "8",
+              " ",
+              SuperscriptBox["D", "2"],
+              " ",
+              SuperscriptBox["k", "4"]
+             }
+            ]
+           }
+          ]
+         ]
+        }
+       ]
+      ],
+      "Output"
+     ]
+    },
+    Open
+   ]
+  ],
+  Cell[BoxData[""], "Input"],
+  Cell[
+   CellGroupData[
+    {
+     Cell[
+      BoxData[
+       RowBox[
+        {
+         "Simplify",
+         "[",
+         RowBox[
+          {
+           RowBox[
+            {
+             RowBox[
+              {
+               RowBox[
+                {"1", "/", RowBox[{"(", RowBox[{"2", "*", "Pi"}], ")"}]}
+               ],
+               "*",
+               RowBox[
+                {
+                 "Integrate",
+                 "[",
+                 RowBox[
+                  {
+                   RowBox[
+                    {
+                     "1",
+                     "/",
+                     RowBox[
+                      {
+                       "(",
+                       RowBox[
+                        {
+                         RowBox[
+                          {
+                           RowBox[
+                            {
+                             "(",
+                             RowBox[
+                              {RowBox[{"I", " ", "x"}], " ", "+", " ", "\[Omega]0"}
+                             ],
+                             ")"
+                            }
+                           ],
+                           "^",
+                           "3"
+                          }
+                         ],
+                         " ",
+                         "*",
+                         " ",
+                         RowBox[
+                          {
+                           "(",
+                           RowBox[
+                            {
+                             RowBox[{RowBox[{"-", "I"}], " ", "x"}],
+                             " ",
+                             "+",
+                             " ",
+                             "\[Omega]0"
+                            }
+                           ],
+                           ")"
+                          }
+                         ],
+                         "*",
+                         RowBox[
+                          {
+                           "(",
+                           RowBox[{RowBox[{"I", "*", "x"}], "+", "\[Omega]1"}],
+                           ")"
+                          }
+                         ]
+                        }
+                       ],
+                       ")"
+                      }
+                     ]
+                    }
+                   ],
+                   ",",
+                   " ",
+                   RowBox[
+                    {
+                     "{",
+                     RowBox[
+                      {
+                       "x",
+                       ",",
+                       " ",
+                       RowBox[{"-", "Infinity"}],
+                       ",",
+                       " ",
+                       "Infinity"
+                      }
+                     ],
+                     "}"
+                    }
+                   ]
+                  }
+                 ],
+                 "]"
+                }
+               ]
+              }
+             ],
+             "/.",
+             RowBox[
+              {
+               "{",
+               RowBox[
+                {
+                 RowBox[
+                  {
+                   "\[Omega]0",
+                   "->",
+                   RowBox[{"D", " ", RowBox[{"k", "^", "2"}]}]
+                  }
+                 ],
+                 ",",
+                 " ",
+                 RowBox[
+                  {
+                   "\[Omega]1",
+                   " ",
+                   "->",
+                   " ",
+                   RowBox[
+                    {
+                     RowBox[{"D", "*", RowBox[{"k", "^", "2"}]}],
+                     " ",
+                     "+",
+                     " ",
+                     "Dr"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ],
+               "}"
+              }
+             ]
+            }
+           ],
+           ",",
+           " ",
+           RowBox[
+            {
+             "Assumptions",
+             "->",
+             RowBox[
+              {
+               "{",
+               RowBox[
+                {
+                 RowBox[{"Dr", ">", "0"}],
+                 ",",
+                 " ",
+                 RowBox[{"D", ">", "0"}],
+                 ",",
+                 " ",
+                 RowBox[{"k", ">", "0"}],
+                 ",",
+                 " ",
+                 RowBox[
+                  {
+                   "Element",
+                   "[",
+                   RowBox[
+                    {
+                     RowBox[{"{", RowBox[{"k", ",", "D", ",", "Dr"}], "}"}],
+                     ",",
+                     " ",
+                     "Reals"
+                    }
+                   ],
+                   "]"
+                  }
+                 ]
+                }
+               ],
+               "}"
+              }
+             ]
+            }
+           ]
+          }
+         ],
+         "]"
+        }
+       ]
+      ],
+      "Input"
+     ],
+     Cell[
+      BoxData[
+       FractionBox[
+        "1",
+        RowBox[
+         {
+          RowBox[
+           {
+            "8",
+            " ",
+            SuperscriptBox["D", "3"],
+            " ",
+            "Dr",
+            " ",
+            SuperscriptBox["k", "6"]
+           }
+          ],
+          "+",
+          RowBox[
+           {
+            "16",
+            " ",
+            SuperscriptBox["D", "4"],
+            " ",
+            SuperscriptBox["k", "8"]
+           }
+          ]
+         }
+        ]
+       ]
+      ],
+      "Output"
+     ]
+    },
+    Open
+   ]
+  ]
+ },
+ FrontEndVersion -> "14.2 for Microsoft Windows (64-bit) (March 14, 2025)",
+ StyleDefinitions -> "Default.nb",
+ ExpressionUUID -> "39d0eab9-09e1-044d-b96d-99b609b5d382"
+]
