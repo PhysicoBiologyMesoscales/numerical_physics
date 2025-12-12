@@ -106,31 +106,65 @@ def compute_P(lp, phi, eps, r_arr, dV, g0, g1):
     return P
 
 
-if __name__ == "__main__":
-    eps = 1e-2
-    Npoints_k = 100
-    Npoints_r = 100
-    k_arr = np.linspace(0, 10, Npoints_k)
-    r_arr = np.linspace(0, 10, Npoints_r)
-    N_lp = 10
-    phi = 0.5
-    lp_arr = np.linspace(10, 200, N_lp)
-    list_P = np.zeros((3, N_lp))
-    for i, lp in enumerate(tqdm(lp_arr)):
-        _X, g0, g1 = compute_g(lp, phi, eps, Vexp, k_arr)
-        g0_r, g1_r = convert_to_r(g0, g1, k_arr, r_arr)
-        list_P[0, i] = phi * lp / 2
-        list_P[1, i] = (
-            -(phi**2)
-            / 2
-            / eps
-            * np.trapz(r_arr**2 * dVexp_r(r_arr) * (1 + g0_r), r_arr)
-        )
-        list_P[2, i] = (
-            phi**2 / eps * lp * np.trapz(r_arr * dVexp_r(r_arr) * g1_r, r_arr)
-        )
+def compute_B(phi, eps, lp, alpha, r_arr, V=Vexp, Npoints_k=100, kmax=10):
+    """Computes correlation function from the reference frame of the 1st particle"""
+    # Compute full correlation matrix
+    k_arr = np.linspace(0, kmax, Npoints_k)
+    X, _g0, _g1 = compute_g(lp, phi, eps, V, k_arr)
 
-plt.plot(lp_arr, list_P.T)
+    # Bessel functions for radial Fourier transform
+    kr = k_arr[:, None] * r_arr[None, :]
+    jint = np.stack([1j**n * jv(n, kr) for n in range(s + 1)], axis=0)
+
+    # Compute correlation functions in real space
+    C = X[s:, s]
+    gn = np.real(np.trapz(C[..., None] * jint, k_arr, axis=1) / 2 / np.pi)
+
+    # Resum the Fourier series
+
+    n = np.arange(1, s + 1)
+    B = gn[0, :, None] + 2 * np.sum(
+        gn[1:, :, None] * np.cos(n[:, None, None] * alpha[None, None, :]), axis=0
+    )
+
+    return B
+
+
+def draw_B(B, r_arr, alpha):
+    from mpl_toolkits.mplot3d import Axes3D
+
+    ax = Axes3D(plt.figure())
+    r, th = np.meshgrid(r_arr, alpha)
+    plt.subplot(projection="polar")
+    plt.pcolormesh(th, r, B.T)
+    plt.show()
+
+
+# if __name__ == "__main__":
+#     eps = 1e-2
+#     Npoints_k = 100
+#     Npoints_r = 100
+#     k_arr = np.linspace(0, 10, Npoints_k)
+#     r_arr = np.linspace(0, 10, Npoints_r)
+#     N_lp = 10
+#     phi = 0.5
+#     lp_arr = np.linspace(10, 200, N_lp)
+#     list_P = np.zeros((3, N_lp))
+#     for i, lp in enumerate(tqdm(lp_arr)):
+#         _X, g0, g1 = compute_g(lp, phi, eps, Vexp, k_arr)
+#         g0_r, g1_r = convert_to_r(g0, g1, k_arr, r_arr)
+#         list_P[0, i] = phi * lp / 2
+#         list_P[1, i] = (
+#             -(phi**2)
+#             / 2
+#             / eps
+#             * np.trapz(r_arr**2 * dVexp_r(r_arr) * (1 + g0_r), r_arr)
+#         )
+#         list_P[2, i] = (
+#             phi**2 / eps * lp * np.trapz(r_arr * dVexp_r(r_arr) * g1_r, r_arr)
+#         )
+
+# plt.plot(lp_arr, list_P.T)
 
 # ll, pp = np.meshgrid(lp_arr, phi_arr)
 # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
