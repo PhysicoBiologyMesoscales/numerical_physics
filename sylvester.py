@@ -50,7 +50,7 @@ def L(k, lp, phi, eps, V):
     L = np.diag((np.arange(N) - s) ** 2) / lp - 1j * k / 2 * (
         np.eye(N, k=1) + np.eye(N, k=-1)
     )
-    L[s, s] += 2 * phi / eps * V(k) * k**2
+    L[s, s] += 8 * phi / eps * V(k) * k**2
     return L
 
 
@@ -68,7 +68,7 @@ def compute_g(lp, phi, eps, V, k_arr):
     X = np.zeros((N, N, Npoints), dtype=np.complex128)
 
     for i, k in enumerate(k_arr):
-        X[..., i] = solve_sylvester(
+        X[..., i] = (2 * np.pi) ** 4 * solve_sylvester(
             L(k, lp, phi, eps, V),
             L(k, lp, phi, eps, V).conj().T,
             RHS(k, eps, V),
@@ -96,11 +96,15 @@ def convert_to_r(g0, g1, k_arr, r_arr):
 def compute_P(lp, phi, eps, r_arr, dV, g0, g1):
     P = (
         phi
+        * 4
         / np.pi
         * (
             lp / 2
-            - phi / 2 / eps * np.trapz(r_arr**2 * dV(r_arr) * (1 + g0), r_arr)
-            + phi / eps * lp * np.trapz(r_arr * dV(r_arr) * g1, r_arr)
+            - phi
+            * 2
+            / eps
+            * np.trapz(r_arr**2 * dV(r_arr) * (1 + g0 / (2 * np.pi)), r_arr)
+            + phi * 4 / eps * lp * np.trapz(r_arr * dV(r_arr) * g1, r_arr) / (2 * np.pi)
         )
     )
     return P
@@ -140,29 +144,27 @@ def draw_B(B, r_arr, alpha):
     plt.show()
 
 
-# if __name__ == "__main__":
-#     eps = 1e-2
-#     Npoints_k = 100
-#     Npoints_r = 100
-#     k_arr = np.linspace(0, 10, Npoints_k)
-#     r_arr = np.linspace(0, 10, Npoints_r)
-#     N_lp = 10
-#     phi = 0.5
-#     lp_arr = np.linspace(10, 200, N_lp)
-#     list_P = np.zeros((3, N_lp))
-#     for i, lp in enumerate(tqdm(lp_arr)):
-#         _X, g0, g1 = compute_g(lp, phi, eps, Vexp, k_arr)
-#         g0_r, g1_r = convert_to_r(g0, g1, k_arr, r_arr)
-#         list_P[0, i] = phi * lp / 2
-#         list_P[1, i] = (
-#             -(phi**2)
-#             / 2
-#             / eps
-#             * np.trapz(r_arr**2 * dVexp_r(r_arr) * (1 + g0_r), r_arr)
-#         )
-#         list_P[2, i] = (
-#             phi**2 / eps * lp * np.trapz(r_arr * dVexp_r(r_arr) * g1_r, r_arr)
-#         )
+if __name__ == "__main__":
+    eps = 1e-2
+    Npoints_k = 100
+    Npoints_r = 100
+    k_arr = np.linspace(0, 10, Npoints_k)
+    r_arr = np.linspace(0, 10, Npoints_r)
+    N_lp = 10
+    N_phi = 10
+    phi = 0.5
+    lp_arr = np.linspace(10, 200, N_lp)
+    phi_arr = np.linspace(0.05, 1, N_phi)
+    list_P = np.zeros((N_phi, N_lp))
+    for i, (phi, lp) in enumerate(tqdm(product(phi_arr, lp_arr))):
+        _X, g0, g1 = compute_g(lp, phi, eps, Vexp, k_arr)
+        g0_r, g1_r = convert_to_r(g0, g1, k_arr, r_arr)
+        row, col = np.unravel_index(i, (N_phi, N_lp))
+        list_P[row, col] = compute_P(lp, phi, eps, r_arr, dVexp_r, g0_r, g1_r)
+
+    ll, pp = np.meshgrid(lp_arr, phi_arr)
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+    ax.plot_surface(ll, pp, list_P, linewidth=0, antialiased=False)
 
 # plt.plot(lp_arr, list_P.T)
 
