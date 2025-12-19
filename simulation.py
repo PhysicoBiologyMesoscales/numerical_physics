@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument("kc", help="Interaction force intensity", type=float)
     parser.add_argument("k", help="Polarity-Velocity alignment strength", type=float)
     parser.add_argument("h", help="Nematic field intensity", type=float)
-    parser.add_argument("alpha", help="Collision asymmetry", type=float)
+    parser.add_argument("alpha", help="Polar field intensity", type=float)
     parser.add_argument("D", help="Translational noise intensity", type=float)
     parser.add_argument("t_max", help="Max simulation time", type=float)
     parser.add_argument("--dt", help="Base Time Step", type=float, default=5e-2)
@@ -189,18 +189,12 @@ class Simulation:
         np.add.at(
             C,
             pairs[:, 0],
-            -self.k
-            * (2 - dij)
-            * (1 - self.alpha * np.sin(theta[pairs[:, 0]]))
-            * np.sin(phi_ij),
+            -self.k * (2 - dij) * np.sin(phi_ij),
         )
         np.add.at(
             C,
             pairs[:, 1],
-            -self.k
-            * (2 - dij)
-            * (1 - self.alpha * np.sin(theta[pairs[:, 1]]))
-            * np.sin(phi_ji),
+            -self.k * (2 - dij) * np.sin(phi_ji),
         )
         return C
 
@@ -220,7 +214,14 @@ class Simulation:
         r.imag %= self.L
 
         ## Update orientation
-        theta += self.dt * (-self.h * np.sin(2 * theta) + C) + xi
+        alignment_sign = np.where(
+            np.logical_and(
+                np.cos(2 * theta) < 2 * self.alpha / self.h - 1, theta > np.pi
+            ),
+            -1,
+            1,
+        )
+        theta += self.dt * (-self.h * alignment_sign * np.sin(2 * theta) + C) + xi
         theta %= 2 * np.pi
         return r, theta
 

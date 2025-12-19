@@ -3,6 +3,7 @@ import holoviews as hv
 import panel as pn
 import argparse
 import h5py
+import chromedriver_binary
 
 from os.path import join
 
@@ -74,10 +75,10 @@ def plot_data(t, vis_field, cmap):
             kwargs["clim"] = (-Fmax, Fmax)
 
     plot = hv.Points(coords, vdims=["random", "theta", "px", "py", "Fx", "Fy"]).opts(
-        width=800,
-        height=int(asp * 800),
+        width=int(700 / asp),
+        height=700,
         cmap=cmap,
-        size=np.sqrt(1e5 / N),
+        size=np.sqrt(5e4 / N),
         color=vis_field,
         **kwargs,
     )
@@ -110,7 +111,9 @@ row.servable()
 
 def main():
     anim = hv.HoloMap({t: plot_data(t, "theta", "hsv") for t in list_t})
-    hv.save(anim, join(sim_path, "sim.gif"), backend="bokeh", fps=12)
+    # hv.save(anim, join(sim_path, "sim.gif"), fps=12)
+    for t in list_t:
+        hv.save(anim[t], join(sim_path, f"{t}.png"), fmt="png")
 
 
 if __name__ == "__main__":
