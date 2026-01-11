@@ -9,7 +9,7 @@ from matplotlib.colors import CenteredNorm
 s = 10
 N = 2 * s + 1
 lp = 10
-phi = 0.01
+phi = 1.0
 eps = 1e-2
 
 
@@ -102,11 +102,14 @@ T = noise_vertex(S1, S2, S12, lp) + collision_vertex(S1, S2, S12, k1, k2, Vexp)
 U = np.einsum("ni, mj, lk , ijk -> nml", Q1, Q2, Q12, T)
 U2 = U / (l1[:, None, None] + l2[None, :, None] + l12[None, None, :])
 
-S = np.einsum("ni, mj, lk , ijk -> nml", P1, P2, P12, U2)
+S_3body = np.einsum("ni, mj, lk , ijk -> nml", P1, P2, P12, U2)
 
 idx = np.arange(N, dtype=np.complex128) - s
 n = idx[:, None, None]
 ml = idx[:, None] + idx[None, :]
 delta = n == (-ml)[None, ...]
 
-G = (S - delta) * np.pi / phi
+# Test the possible solution S3_nml = S_ni S_mj S_lk \delta_{i+j+k, 0}
+S_th = np.einsum("ni, mj, lk, ijk -> nml", S1, S2, S12, delta)
+
+# G = (S - delta) * np.pi / phi
