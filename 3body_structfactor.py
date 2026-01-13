@@ -8,8 +8,8 @@ from matplotlib.colors import CenteredNorm
 
 s = 10
 N = 2 * s + 1
-lp = 10
-phi = 1.0
+lp = 0.01
+phi = 0.1
 eps = 1e-2
 
 
@@ -26,7 +26,7 @@ def L(k, lp, phi, eps, V):
 
 
 k1 = 1.0
-k2 = 1.0 * np.exp(2 * np.pi / 3 * 1j)
+k2 = 2.0 * np.exp(2 * np.pi / 3 * 1j)
 
 L1 = L(k1, lp, phi, eps, Vexp)
 L2 = L(k2, lp, phi, eps, Vexp)
@@ -46,6 +46,7 @@ def compute_S(L, lp):
 
 
 S1, S2, S12 = compute_S(L1, lp), compute_S(L2, lp), compute_S(L12, lp)
+# S1, S2, S12 = np.eye(N), np.eye(N), np.eye(N)
 
 
 def extend_S(S):
@@ -56,23 +57,33 @@ def extend_S(S):
 
 
 def noise_vertex(S1, S2, S12, lp):
-    def partial_vtx(S, axis):
-        match axis:
-            case 0:
-                j, k, ijk = "m", "l", "nml"
-            case 1:
-                j, k, ijk = "l", "n", "mln"
-            case 2:
-                j, k, ijk = "n", "m", "lnm"
+    _S1, _S2, _S12 = extend_S(S1), extend_S(S2), extend_S(S12)
+    idx = np.arange(N) - s
+    lm = 2 * s - idx[:, None] + idx[None, :]
+    # gathered = np.take(_S, ml, axis=1)[s : s + N]
+    # tot = sign * np.einsum(f"{j}, {k}, {ijk} -> nml", idx, idx, gathered)
+    # return tot
 
-        _S = extend_S(S)
-        idx = np.arange(N) - s
-        ml = 2 * s - idx[:, None] - idx[None, :]
-        gathered = np.take(_S, ml, axis=1)[s : s + N]
-        tot = np.einsum(f"{j}, {k}, {ijk} -> nml", idx, idx, gathered)
-        return tot
-
-    return -2 / lp * (partial_vtx(S1, 0) + partial_vtx(S2, 1) + partial_vtx(S12, 2))
+    # return 2 / lp * (partial_vtx(S1, 0) + partial_vtx(S2, 1) + partial_vtx(S12, 2))
+    v1 = np.einsum(
+        "m, l, nml -> nml",
+        idx,
+        idx,
+        np.take(_S1, 2 * s - idx[:, None] + idx[None, :], axis=1)[s : s + N],
+    )
+    v2 = np.einsum(
+        "n, l, mnl -> nml",
+        idx,
+        idx,
+        np.take(_S2, 2 * s - idx[:, None] + idx[None, :], axis=1)[s : s + N],
+    )
+    v12 = -np.einsum(
+        "n, m, lnm -> nml",
+        idx,
+        idx,
+        np.take(_S12, 2 * s - idx[:, None] - idx[None, :], axis=1)[s : s + N][s - idx],
+    )
+    return 2 / lp * (v1 + v2 + v12)
 
 
 def dot(u, v):
@@ -87,29 +98,36 @@ def collision_vertex(S1, S2, S12, k1, k2, V):
         / np.pi
         / eps
         * (
-            dot(k1, k2) * V(k2) * S2[None, :, (s,)] * S12.T[idx, None, :]
-            - dot(k1, k1 + k2) * V(k1 + k2) * S12[None, None, :, s] * S2.T[idx, :, None]
-            + dot(k2, k1) * V(k1) * S1[:, (s,), None] * S12.T[None, idx, :]
-            - dot(k2, k1 + k2) * V(k1 + k2) * S12[None, None, :, s] * S1[:, idx, None]
-            - dot(k1 + k2, k1) * V(k1) * S1[:, (s,), None] * S2[None, :, idx]
-            - dot(k1 + k2, k2) * V(k2) * S2[None, :, (s,)] * S1[:, None, idx]
+            dot(k1, k2) * V(k2) * np.einsum("m, ln -> nml", S2[:, s], S12[idx][:, idx])
+            - dot(k1, k1 + k2)
+            * V(k1 + k2)
+            * np.einsum("l, mn -> nml", S12[idx, s], S2[:, idx])
+            + dot(k2, k1)
+            * V(k1)
+            * np.einsum("n, lm -> nml", S1[:, s], S12[idx][:, idx])
+            - dot(k2, k1 + k2)
+            * V(k1 + k2)
+            * np.einsum("l, nm -> nml", S12[idx, s], S1[:, idx])
+            - dot(k1 + k2, k1) * V(k1) * np.einsum("n, ml -> nml", S1[:, s], S2)
+            - dot(k1 + k2, k2) * V(k2) * np.einsum("m, nl -> nml", S2[:, s], S1)
         )
     )
 
 
 T = noise_vertex(S1, S2, S12, lp) + collision_vertex(S1, S2, S12, k1, k2, Vexp)
 
-U = np.einsum("ni, mj, lk , ijk -> nml", Q1, Q2, Q12, T)
+U = np.einsum("ni, mj, kl , ijk -> nml", Q1, Q2, P12, T)
 U2 = U / (l1[:, None, None] + l2[None, :, None] + l12[None, None, :])
 
-S_3body = np.einsum("ni, mj, lk , ijk -> nml", P1, P2, P12, U2)
+S_3b = np.einsum("ni, mj, kl , ijk -> nml", P1, P2, Q12, U2)
 
 idx = np.arange(N, dtype=np.complex128) - s
 n = idx[:, None, None]
 ml = idx[:, None] + idx[None, :]
 delta = n == (-ml)[None, ...]
+rev_idx = 2 * s - np.arange(N)
 
-# Test the possible solution S3_nml = S_ni S_mj S_lk \delta_{i+j+k, 0}
-S_th = np.einsum("ni, mj, lk, ijk -> nml", S1, S2, S12, delta)
+# # Test the possible solution S3_nml = S_ni S_mj S_lk \delta_{i+j+k, 0}
+S_th = np.einsum("ni, mj, lk, ijk -> nml", S1, S2, S12[rev_idx], delta)
 
-# G = (S - delta) * np.pi / phi
+# # G = (S - delta) * np.pi / phi
