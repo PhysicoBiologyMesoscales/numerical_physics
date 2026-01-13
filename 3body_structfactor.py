@@ -1,20 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import solve_sylvester, eig, inv
-from scipy.special import jv, struve
-from itertools import product
-from tqdm import tqdm
-from matplotlib.colors import CenteredNorm
+from sylvester_aux import dot, Vexp
 
 s = 10
 N = 2 * s + 1
 lp = 0.01
 phi = 0.1
 eps = 1e-2
-
-
-def Vexp(k, r0=0.5):
-    return 2 * np.pi * r0**2 * np.exp(-0.5 * (r0 * np.abs(k)) ** 2)
 
 
 def L(k, lp, phi, eps, V):
@@ -84,11 +77,6 @@ def noise_vertex(S1, S2, S12, lp):
         np.take(_S12, 2 * s - idx[:, None] - idx[None, :], axis=1)[s : s + N][s - idx],
     )
     return 2 / lp * (v1 + v2 + v12)
-
-
-def dot(u, v):
-    """Scalar product of 2 complex numbers"""
-    return np.real(0.5 * (u * np.conjugate(v) + np.conjugate(u) * v))
 
 
 def collision_vertex(S1, S2, S12, k1, k2, V):
