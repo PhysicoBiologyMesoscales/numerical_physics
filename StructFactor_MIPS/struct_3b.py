@@ -91,7 +91,7 @@ def compute_3bod(k1, k2, lp, phi, eps, V, s=10):
 
     S_3b = np.einsum("ni, mj, kl , ijk -> nml", P1, P2, Q12, U2)
 
-    return S_3b, T
+    return S_3b
 
 
 if __name__ == "__main__":
