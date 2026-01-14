@@ -7,7 +7,7 @@ from itertools import product
 from tqdm import tqdm
 from matplotlib.colors import CenteredNorm
 
-from sylvester_aux import dot, L, Vexp, Vexp_r, dVexp_r
+from struct_aux import dot, L, Vexp, Vexp_r, dVexp_r
 
 s = 10
 N = 2 * s + 1

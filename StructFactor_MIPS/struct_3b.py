@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import solve_sylvester, eig, inv
-from sylvester_aux import dot, Vexp, L
+from struct_aux import dot, Vexp, L
 
 
 def compute_S(L, lp, s=10):
