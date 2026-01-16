@@ -8,6 +8,7 @@ from tqdm import tqdm
 from matplotlib.colors import CenteredNorm
 
 from struct_aux import dot, L, Vexp, Vexp_r, dVexp_r
+from struct_3b import compute_3bod
 
 s = 10
 N = 2 * s + 1
@@ -15,8 +16,17 @@ N = 2 * s + 1
 # RHS for sylvester solve
 
 
-def RHS_S(lp):
-    return np.diag(2 / lp * (np.arange(N) - s) ** 2)
+def RHS_S(k, lp, phi, eps, V):
+    k2abs_arr = np.linspace(0, 10, 200)
+    alpha = np.linspace(0, 2 * np.pi, 10, endpoint=False)
+    k2_arr = k2abs_arr[:, None] * np.exp(1j * alpha[None, :])
+    S3arr = np.zeros((len(k2abs_arr), len(alpha), N, N), dtype=np.complex128)
+    for i, k2 in enumerate(k2_arr.flatten()):
+        S3 = compute_3bod(k, k2, lp, phi, eps, V, s=s)
+        S3arr[i // len(alpha), i % len(alpha), :, :] = S3[:, s, :]
+    return np.diag(2 / lp * (np.arange(N) - s) ** 2) + np.trapz(
+        np.trapz(S3arr, k2abs_arr, axis=0), alpha, axis=0
+    )
 
 
 def RHS_h(k, eps, V):
