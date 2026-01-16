@@ -142,7 +142,7 @@ def compute_3bod_optimized(k1, k2, lp, phi, eps, V, s=10,
         )
         return 2 / lp * (v1 + v2 + v12)
 
-    def collision_vertex(S1, S2, S12, k1, k2, V):
+    def collision_vertex(S1, S2, S12, k1, k2, V, phi, eps):
         idx = 2 * s - np.arange(N)
         return (
             phi
@@ -166,7 +166,7 @@ def compute_3bod_optimized(k1, k2, lp, phi, eps, V, s=10,
             )
         )
 
-    T = noise_vertex(S1, S2, S12, lp) + collision_vertex(S1, S2, S12, k1, k2, Vexp)
+    T = noise_vertex(S1, S2, S12, lp) + collision_vertex(S1, S2, S12, k1, k2, Vexp, phi, eps)
 
     U = np.einsum("ni, mj, kl , ijk -> nml", Q1, Q2, P12, T)
     U2 = U / (l1[:, None, None] + l2[None, :, None] + l12[None, None, :])
@@ -268,7 +268,9 @@ def compute_correlations(lp, phi, eps, V, k_arr, which="h", parallel="False"):
         case "h":
             RHS = lambda k: RHS_h(k, eps, V)
         case "S":
-            RHS = lambda _x: RHS_S(lp)
+            RHS = lambda k: RHS_S(k, lp, phi, eps, V)
+        case _:
+            raise ValueError(f"Unknown correlation type: {which}. Must be 'h' or 'S'.")
 
     if parallel:
         # Works best for large k_arr
@@ -327,9 +329,16 @@ def compute_P(lp, phi, eps, r_arr, dV, g0, g1):
 
 
 def compute_B(phi, eps, lp, alpha, r_arr, V=Vexp, Npoints_k=100, kmax=10):
-    """Computes correlation function from the reference frame of the 1st particle"""
+    """
+    Computes correlation function from the reference frame of the 1st particle.
+    
+    NOTE: This function is currently not fully implemented. The 'g' case in 
+    compute_correlations is not defined. This function is preserved for 
+    backward compatibility but will raise a ValueError if called.
+    """
     # Compute full correlation matrix
     k_arr = np.linspace(0, kmax, Npoints_k)
+    # NOTE: 'which="g"' is not implemented - this will raise ValueError
     G = compute_correlations(lp, phi, eps, V, k_arr, which="g")
 
     # Bessel functions for radial Fourier transform
