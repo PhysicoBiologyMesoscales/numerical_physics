@@ -1,6 +1,17 @@
+"""
+2-body structure factor calculations (optimized version).
+
+This module has been optimized to minimize costly operations:
+- Pre-computes L1, S1, eigendecomposition for fixed k1
+- Pre-computes L2, S2, eigendecomposition for all k2 values
+- Only computes L12, S12, eigendecomposition per (k1, k2) pair
+
+For the fully optimized implementation with k2 caching, see struct_optimized.py
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.linalg import solve_sylvester
+from scipy.linalg import solve_sylvester, eig, inv
 from scipy.special import jv, struve
 from joblib import Parallel, delayed
 from itertools import product
@@ -8,7 +19,7 @@ from tqdm import tqdm
 from matplotlib.colors import CenteredNorm
 
 from struct_aux import dot, L, Vexp, Vexp_r, dVexp_r
-from struct_3b import compute_3bod
+from struct_3b import compute_3bod, compute_S
 
 s = 10
 N = 2 * s + 1
@@ -17,16 +28,22 @@ N = 2 * s + 1
 
 
 def RHS_S(k, lp, phi, eps, V):
-    from scipy.linalg import eig, inv
+    """
+    Compute RHS for structure factor S with optimization.
     
+    Optimizations:
+    - Pre-computes L1, S1, eigendecomposition once (eliminates ~1999/2000 redundant ops)
+    - Only computes L2, L12 eigendecompositions in the loop
+    
+    For even better performance when calling with multiple k values, 
+    use RHS_S_with_k2_cache from struct_optimized.py
+    """
     k2abs_arr = np.linspace(0, 10, 200)
     alpha = np.linspace(0, 2 * np.pi, 10, endpoint=False)
     k2_arr = k2abs_arr[:, None] * np.exp(1j * alpha[None, :])
     S3arr = np.zeros((len(k2abs_arr), len(alpha), N, N), dtype=np.complex128)
     
     # Pre-compute L1-related values that are constant across the loop
-    from struct_aux import L
-    from struct_3b import compute_S
     L1 = L(k, lp, phi, eps, V)
     S1 = compute_S(L1, lp, s=s)
     l1, P1 = eig(L1)
