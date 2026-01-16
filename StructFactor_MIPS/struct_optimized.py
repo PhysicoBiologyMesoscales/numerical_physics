@@ -344,8 +344,8 @@ def compute_B(phi, eps, lp, alpha, r_arr, V=Vexp, Npoints_k=100, kmax=10):
     
     WARNING: This function is not fully implemented. It requires the 'g' case
     in compute_correlations() which is not defined. Calling this function will
-    raise a ValueError. This function is preserved from the original code for
-    reference but should not be used.
+    raise NotImplementedError. This function is preserved from the original code
+    for reference but should not be used.
     """
     raise NotImplementedError(
         "compute_B requires the 'g' case in compute_correlations which is not "
@@ -353,29 +353,9 @@ def compute_B(phi, eps, lp, alpha, r_arr, V=Vexp, Npoints_k=100, kmax=10):
         "cannot be used until the 'g' correlation type is implemented."
     )
 
-    # Bessel functions for radial Fourier transform
-    kr = k_arr[:, None] * r_arr[None, :]
-    jint = np.stack([1j**n * jv(n, kr) for n in range(s + 1)], axis=0)
-
-    # Compute correlation functions in real space
-    C = G[s:, s]
-    gn = np.real(np.trapz(C[..., None] * jint, k_arr, axis=1) / 2 / np.pi)
-
-    # Resum the Fourier series
-
-    n = np.arange(1, s + 1)
-    B = gn[0, :, None] + 2 * np.sum(
-        gn[1:, :, None] * np.cos(n[:, None, None] * alpha[None, None, :]), axis=0
-    )
-
-    return B
-
 
 def draw_B(B, r_arr, alpha):
     """Visualize correlation function B"""
-    from mpl_toolkits.mplot3d import Axes3D
-
-    ax = Axes3D(plt.figure())
     r, th = np.meshgrid(r_arr, alpha)
     plt.subplot(projection="polar")
     plt.pcolormesh(th, r, B.T)
