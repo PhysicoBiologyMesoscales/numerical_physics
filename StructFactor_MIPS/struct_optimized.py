@@ -42,24 +42,28 @@ def precompute_k2_values(k2abs_arr, alpha, lp, phi, eps, V, s=10):
     Pre-compute all k2-related matrices that can be reused across different k1 values.
     
     Returns:
-        dict: Dictionary with k2 values as keys and precomputed matrices as values
+        dict: Dictionary with (i, j) index tuples as keys mapping to precomputed matrices.
+              The indices correspond to k2abs_arr[i] * exp(1j * alpha[j])
     """
     k2_arr = k2abs_arr[:, None] * np.exp(1j * alpha[None, :])
     k2_cache = {}
     
-    for k2 in k2_arr.flatten():
-        L2 = L(k2, lp, phi, eps, V)
-        S2 = compute_S(L2, lp, s=s)
-        l2, P2 = eig(L2)
-        Q2 = inv(P2)
-        
-        k2_cache[k2] = {
-            'L2': L2,
-            'S2': S2,
-            'l2': l2,
-            'P2': P2,
-            'Q2': Q2
-        }
+    for i in range(len(k2abs_arr)):
+        for j in range(len(alpha)):
+            k2 = k2_arr[i, j]
+            L2 = L(k2, lp, phi, eps, V)
+            S2 = compute_S(L2, lp, s=s)
+            l2, P2 = eig(L2)
+            Q2 = inv(P2)
+            
+            k2_cache[(i, j)] = {
+                'k2': k2,
+                'L2': L2,
+                'S2': S2,
+                'l2': l2,
+                'P2': P2,
+                'Q2': Q2
+            }
     
     return k2_cache
 
@@ -204,15 +208,17 @@ def RHS_S(k, lp, phi, eps, V):
     k2_cache = precompute_k2_values(k2abs_arr, alpha, lp, phi, eps, V, s=s)
     
     # Main loop - only computes L12 for each iteration
-    for i, k2 in enumerate(k2_arr.flatten()):
-        k2_data = k2_cache[k2]
-        S3 = compute_3bod_optimized(
-            k, k2, lp, phi, eps, V, s=s,
-            L1=L1, S1=S1, l1=l1, P1=P1, Q1=Q1,
-            L2=k2_data['L2'], S2=k2_data['S2'], 
-            l2=k2_data['l2'], P2=k2_data['P2'], Q2=k2_data['Q2']
-        )
-        S3arr[i // len(alpha), i % len(alpha), :, :] = S3[:, s, :]
+    for i in range(len(k2abs_arr)):
+        for j in range(len(alpha)):
+            k2_data = k2_cache[(i, j)]
+            k2 = k2_data['k2']
+            S3 = compute_3bod_optimized(
+                k, k2, lp, phi, eps, V, s=s,
+                L1=L1, S1=S1, l1=l1, P1=P1, Q1=Q1,
+                L2=k2_data['L2'], S2=k2_data['S2'], 
+                l2=k2_data['l2'], P2=k2_data['P2'], Q2=k2_data['Q2']
+            )
+            S3arr[i, j, :, :] = S3[:, s, :]
     
     return np.diag(2 / lp * (np.arange(N) - s) ** 2) + np.trapz(
         np.trapz(S3arr, k2abs_arr, axis=0), alpha, axis=0
@@ -225,8 +231,10 @@ def RHS_S_with_k2_cache(k, lp, phi, eps, V, k2_cache, k2abs_arr, alpha):
     
     Use this when calling RHS_S multiple times with different k values
     but the same k2 grid, lp, phi, eps, and V.
+    
+    Parameters:
+        k2_cache: Dictionary with (i, j) tuples as keys, from precompute_k2_values()
     """
-    k2_arr = k2abs_arr[:, None] * np.exp(1j * alpha[None, :])
     S3arr = np.zeros((len(k2abs_arr), len(alpha), N, N), dtype=np.complex128)
     
     # Pre-compute L1-related values (constant for this k)
@@ -236,15 +244,17 @@ def RHS_S_with_k2_cache(k, lp, phi, eps, V, k2_cache, k2abs_arr, alpha):
     Q1 = inv(P1)
     
     # Main loop - only computes L12 for each iteration
-    for i, k2 in enumerate(k2_arr.flatten()):
-        k2_data = k2_cache[k2]
-        S3 = compute_3bod_optimized(
-            k, k2, lp, phi, eps, V, s=s,
-            L1=L1, S1=S1, l1=l1, P1=P1, Q1=Q1,
-            L2=k2_data['L2'], S2=k2_data['S2'], 
-            l2=k2_data['l2'], P2=k2_data['P2'], Q2=k2_data['Q2']
-        )
-        S3arr[i // len(alpha), i % len(alpha), :, :] = S3[:, s, :]
+    for i in range(len(k2abs_arr)):
+        for j in range(len(alpha)):
+            k2_data = k2_cache[(i, j)]
+            k2 = k2_data['k2']
+            S3 = compute_3bod_optimized(
+                k, k2, lp, phi, eps, V, s=s,
+                L1=L1, S1=S1, l1=l1, P1=P1, Q1=Q1,
+                L2=k2_data['L2'], S2=k2_data['S2'], 
+                l2=k2_data['l2'], P2=k2_data['P2'], Q2=k2_data['Q2']
+            )
+            S3arr[i, j, :, :] = S3[:, s, :]
     
     return np.diag(2 / lp * (np.arange(N) - s) ** 2) + np.trapz(
         np.trapz(S3arr, k2abs_arr, axis=0), alpha, axis=0
@@ -332,14 +342,16 @@ def compute_B(phi, eps, lp, alpha, r_arr, V=Vexp, Npoints_k=100, kmax=10):
     """
     Computes correlation function from the reference frame of the 1st particle.
     
-    NOTE: This function is currently not fully implemented. The 'g' case in 
-    compute_correlations is not defined. This function is preserved for 
-    backward compatibility but will raise a ValueError if called.
+    WARNING: This function is not fully implemented. It requires the 'g' case
+    in compute_correlations() which is not defined. Calling this function will
+    raise a ValueError. This function is preserved from the original code for
+    reference but should not be used.
     """
-    # Compute full correlation matrix
-    k_arr = np.linspace(0, kmax, Npoints_k)
-    # NOTE: 'which="g"' is not implemented - this will raise ValueError
-    G = compute_correlations(lp, phi, eps, V, k_arr, which="g")
+    raise NotImplementedError(
+        "compute_B requires the 'g' case in compute_correlations which is not "
+        "implemented. This function is preserved for backward compatibility but "
+        "cannot be used until the 'g' correlation type is implemented."
+    )
 
     # Bessel functions for radial Fourier transform
     kr = k_arr[:, None] * r_arr[None, :]

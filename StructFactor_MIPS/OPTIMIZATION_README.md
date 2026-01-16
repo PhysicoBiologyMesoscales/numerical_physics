@@ -76,6 +76,7 @@ s = 10
 
 # Pre-compute k2 cache once (reuse for all k values)
 k2_cache = precompute_k2_values(k2abs_arr, alpha, lp, phi, eps, Vexp, s=s)
+# Cache uses (i, j) index tuples for k2abs_arr[i] * exp(1j * alpha[j])
 
 # Compute RHS_S for many k values efficiently
 results = []
@@ -109,6 +110,9 @@ for k2 in k2_values:
     l2, P2 = eig(L2)
     Q2 = inv(P2)
     k2_cache[k2] = {'L2': L2, 'S2': S2, 'l2': l2, 'P2': P2, 'Q2': Q2}
+
+# Note: For production use with grid k2 values, use precompute_k2_values()
+# which uses (i,j) index tuples to avoid floating point comparison issues
 
 # Compute 3-body factors efficiently
 results = []
@@ -145,9 +149,10 @@ python /tmp/test_optimized.py
    - Computing many (k1, k2) pairs where k1 or k2 values repeat
    
 2. Memory vs Speed tradeoff:
-   - k2 cache stores ~2000 × (5 matrices) = ~10000 matrix objects
+   - k2 cache stores ~2000 × (6 items: k2 + 5 matrices) per entry
+   - Cache uses (i, j) index tuples to avoid floating point comparison issues
    - Each matrix is 21×21 complex = ~3.5 KB
-   - Total memory: ~35 MB per cache (acceptable for most systems)
+   - Total memory: ~40 MB per cache (acceptable for most systems)
 
 3. For single isolated calculations, the overhead of caching may not provide benefits.
 
