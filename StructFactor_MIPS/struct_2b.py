@@ -17,12 +17,23 @@ N = 2 * s + 1
 
 
 def RHS_S(k, lp, phi, eps, V):
+    from scipy.linalg import eig, inv
+    
     k2abs_arr = np.linspace(0, 10, 200)
     alpha = np.linspace(0, 2 * np.pi, 10, endpoint=False)
     k2_arr = k2abs_arr[:, None] * np.exp(1j * alpha[None, :])
     S3arr = np.zeros((len(k2abs_arr), len(alpha), N, N), dtype=np.complex128)
+    
+    # Pre-compute L1-related values that are constant across the loop
+    from struct_aux import L
+    from struct_3b import compute_S
+    L1 = L(k, lp, phi, eps, V)
+    S1 = compute_S(L1, lp, s=s)
+    l1, P1 = eig(L1)
+    Q1 = inv(P1)
+    
     for i, k2 in enumerate(k2_arr.flatten()):
-        S3 = compute_3bod(k, k2, lp, phi, eps, V, s=s)
+        S3 = compute_3bod(k, k2, lp, phi, eps, V, s=s, L1=L1, S1=S1, l1=l1, P1=P1, Q1=Q1)
         S3arr[i // len(alpha), i % len(alpha), :, :] = S3[:, s, :]
     return np.diag(2 / lp * (np.arange(N) - s) ** 2) + np.trapz(
         np.trapz(S3arr, k2abs_arr, axis=0), alpha, axis=0

@@ -11,21 +11,29 @@ def compute_S(L, lp, s=10):
     return S
 
 
-def compute_3bod(k1, k2, lp, phi, eps, V, s=10):
+def compute_3bod(k1, k2, lp, phi, eps, V, s=10, L1=None, S1=None, l1=None, P1=None, Q1=None):
 
     N = 2 * s + 1
 
-    L1 = L(k1, lp, phi, eps, V)
+    # Use pre-computed values if available, otherwise compute them
+    if L1 is None:
+        L1 = L(k1, lp, phi, eps, V)
+    if l1 is None or P1 is None:
+        l1, P1 = eig(L1)
+    if Q1 is None:
+        Q1 = inv(P1)
+    if S1 is None:
+        S1 = compute_S(L1, lp, s=s)
+    
     L2 = L(k2, lp, phi, eps, V)
     L12 = L(-k1 - k2, lp, phi, eps, V)
 
-    l1, P1 = eig(L1)
     l2, P2 = eig(L2)
     l12, P12 = eig(L12)
 
-    Q1, Q2, Q12 = inv(P1), inv(P2), inv(P12)
+    Q2, Q12 = inv(P2), inv(P12)
 
-    S1, S2, S12 = compute_S(L1, lp), compute_S(L2, lp), compute_S(L12, lp)
+    S2, S12 = compute_S(L2, lp, s=s), compute_S(L12, lp, s=s)
 
     def extend_S(S):
         """Extend S by assuming S_{nm} = \delta_{nm} for abs(n)>s or abs(m)>s"""
