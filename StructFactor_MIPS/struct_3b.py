@@ -115,7 +115,7 @@ def compute_3bod(k1, k2, lp, phi, eps, V, s=10,
         )
         return 2 / lp * (v1 + v2 + v12)
 
-    def collision_vertex(S1, S2, S12, k1, k2, V):
+    def collision_vertex(S1, S2, S12, k1, k2, V, phi, eps):
         idx = 2 * s - np.arange(N)
         return (
             phi
@@ -139,7 +139,7 @@ def compute_3bod(k1, k2, lp, phi, eps, V, s=10,
             )
         )
 
-    T = noise_vertex(S1, S2, S12, lp) + collision_vertex(S1, S2, S12, k1, k2, Vexp)
+    T = noise_vertex(S1, S2, S12, lp) + collision_vertex(S1, S2, S12, k1, k2, V, phi, eps)
 
     U = np.einsum("ni, mj, kl , ijk -> nml", Q1, Q2, P12, T)
     U2 = U / (l1[:, None, None] + l2[None, :, None] + l12[None, None, :])

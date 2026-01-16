@@ -63,13 +63,13 @@ def RHS_h(k, eps, V):
     return mat
 
 
-def compute_correlations(lp, phi, eps, V, k_arr, which="h", parallel="False"):
+def compute_correlations(lp, phi, eps, V, k_arr, which="h", parallel=False):
     """Computes correlation matrices for all values in k_arr"""
     match which:
         case "h":
             RHS = lambda k: RHS_h(k, eps, V)
         case "S":
-            RHS = lambda _x: RHS_S(lp)
+            RHS = lambda k: RHS_S(k, lp, phi, eps, V)
 
     if parallel:
         # Works best for large k_arr
