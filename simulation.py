@@ -176,10 +176,8 @@ class Simulation:
 
     def compute_forces(self, pairs, rij, dij):
         F = np.zeros(self.N, dtype=np.complex128)
-        dij = np.where(dij == 0, 1.0, dij)
-        uij = rij / dij
-        np.add.at(F, pairs[:, 0], -self.kc * (2 * uij - rij))
-        np.add.at(F, pairs[:, 1], self.kc * (2 * uij - rij))
+        np.add.at(F, pairs[:, 0], -self.kc * rij * np.exp(-0.5 * dij**2))
+        np.add.at(F, pairs[:, 1], self.kc * rij * np.exp(-0.5 * dij**2))
         return F
 
     def compute_torques(self, pairs, rij, dij, theta):
