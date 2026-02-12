@@ -34,12 +34,6 @@ def parse_args():
         "-v", "--verbose", help="Display information", action="store_true"
     )
     parser.add_argument(
-        "-f",
-        "--force_stationary",
-        help="Force simulation into a stationnary state by aligning initial orientations",
-        action="store_true",
-    )
-    parser.add_argument(
         "-ng",
         "--no_pcf",
         help="Do not compute pair correlation function",
@@ -143,8 +137,6 @@ class Simulation:
             0, self.L, size=self.N
         )
         theta = np.random.uniform(0, 2 * np.pi, size=self.N)
-        if self.force_stat:
-            theta = np.random.normal(0, 0.5, self.N)
         # Initialize tree
         tree = KDTree(np.stack([r.real, r.imag], axis=-1), boxsize=[self.l, self.L])
         tree_ref = r.copy()
@@ -263,7 +255,6 @@ def main():
         parms.dt_save,
         parms.dt,
         parms.t_max,
-        parms.force_stationary,
         parms.no_pcf,
     )
     sim.set_hdf_file()
