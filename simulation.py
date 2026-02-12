@@ -21,9 +21,6 @@ def parse_args():
     parser.add_argument("phi", help="Packing Fraction", type=float)
     parser.add_argument("v0", help="Particle velocity", type=float)
     parser.add_argument("kc", help="Interaction force intensity", type=float)
-    parser.add_argument("k", help="Polarity-Velocity alignment strength", type=float)
-    parser.add_argument("h", help="Nematic field intensity", type=float)
-    parser.add_argument("alpha", help="Collision asymmetry", type=float)
     parser.add_argument("D", help="Translational noise intensity", type=float)
     parser.add_argument("t_max", help="Max simulation time", type=float)
     parser.add_argument("--dt", help="Base Time Step", type=float, default=5e-2)
@@ -72,14 +69,10 @@ class Simulation:
         asp,
         v0,
         kc,
-        k,
-        h,
-        alpha,
         D,
         dt_save,
         dt,
         t_max,
-        force_stat,
         no_pcf,
     ):
         self.save_path = save_path
@@ -92,9 +85,6 @@ class Simulation:
         self.L = asp * self.l
         self.v0 = v0  # Propulsion velocity
         self.kc = kc  # Collision force
-        self.k = k  # Polarity-velocity coupling
-        self.h = h  # Nematic field intensity
-        self.alpha = alpha
         self.D = D  # Translational noise
         ## Set time intervals
         self.dt_save = dt_save
@@ -109,7 +99,6 @@ class Simulation:
         self.t_save_arr = np.arange(0, t_max, dt_save)
         self.Nt_save = len(self.t_save_arr)
         self.count_rebuild = None
-        self.force_stat = force_stat
         self.no_pcf = no_pcf
 
     def set_hdf_file(self):
@@ -127,9 +116,7 @@ class Simulation:
             h5py_file.attrs.create("L", self.L)
             h5py_file.attrs.create("asp", self.asp)
             h5py_file.attrs.create("v0", self.v0)
-            h5py_file.attrs.create("k", self.k)
             h5py_file.attrs.create("kc", self.kc)
-            h5py_file.attrs.create("h", self.h)
             h5py_file.attrs.create("dt_save", self.dt_save)
             h5py_file.attrs.create("Nt", self.Nt_save)
             h5py_file.attrs.create("t_max", self.t_max)
@@ -180,29 +167,7 @@ class Simulation:
         np.add.at(F, pairs[:, 1], self.kc * rij * np.exp(-0.5 * dij**2))
         return F
 
-    def compute_torques(self, pairs, rij, dij, theta):
-        C = np.zeros(self.N)
-        phi_ij = np.angle(rij) - theta[pairs[:, 0]]
-        phi_ji = np.angle(-rij) - theta[pairs[:, 1]]
-        np.add.at(
-            C,
-            pairs[:, 0],
-            -self.k
-            * (2 - dij)
-            * (1 - self.alpha * np.sin(theta[pairs[:, 0]]))
-            * np.sin(phi_ij),
-        )
-        np.add.at(
-            C,
-            pairs[:, 1],
-            -self.k
-            * (2 - dij)
-            * (1 - self.alpha * np.sin(theta[pairs[:, 1]]))
-            * np.sin(phi_ji),
-        )
-        return C
-
-    def sim_step(self, r, theta, F, C):
+    def sim_step(self, r, theta, F):
         v = self.v0 * (np.exp(1j * theta) + F)
         # Gaussian white noise
         xi = np.sqrt(2 * self.dt) * np.random.normal(size=self.N)
@@ -218,7 +183,7 @@ class Simulation:
         r.imag %= self.L
 
         ## Update orientation
-        theta += self.dt * (-self.h * np.sin(2 * theta) + C) + xi
+        theta += xi
         theta %= 2 * np.pi
         return r, theta
 
@@ -258,7 +223,6 @@ class Simulation:
                 # Find pairs and compute forces
                 pairs, rij, dij = self.get_interacting_pairs(r, tree)
                 F = self.compute_forces(pairs, rij, dij)
-                C = self.compute_torques(pairs, rij, dij, theta)
                 if not self.no_pcf:
                     # Store pcf data in temp arrays
                     _N_pairs[t_idx % self.interval_btw_saves] = pcf.find_pairs(
@@ -277,7 +241,7 @@ class Simulation:
                         )
                     hdf_file.flush()
                 # Perform simulation step
-                r, theta = self.sim_step(r, theta, F, C)
+                r, theta = self.sim_step(r, theta, F)
                 # Update tree if needed
                 tree, tree_ref = self.update_tree(r, tree, tree_ref)
             if not self.no_pcf:
@@ -295,9 +259,6 @@ def main():
         parms.asp,
         parms.v0,
         parms.kc,
-        parms.k,
-        parms.h,
-        parms.alpha,
         parms.D,
         parms.dt_save,
         parms.dt,
