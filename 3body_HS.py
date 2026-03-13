@@ -13,18 +13,22 @@ class ThreeBodyG:
     >>> phi, lx, ly, g_grid = solver.compute_g_on_grid()
     """
 
-    def __init__(self, u: np.ndarray, v: np.ndarray, plane: int = 1):
+    def __init__(
+        self, u: np.ndarray, v: np.ndarray, plane: int = 1, name: str = "main"
+    ):
         self.u = np.asarray(u, dtype=float)
         self.v = np.asarray(v, dtype=float)
+        self.vu = self.v - self.u
         self.plane = plane
+        self.name = name
 
         # Derived geometry
         self.u_norm = np.linalg.norm(self.u)
         self.v_norm = np.linalg.norm(self.v)
+        self.vu_norm = np.linalg.norm(self.vu)
         self.u_hat = self.u / self.u_norm
         self.v_hat = self.v / self.v_norm
-        self.vu = self.v - self.u
-        self.vu_hat = self.vu / np.linalg.norm(self.vu)
+        self.vu_hat = self.vu / self.vu_norm
 
         # Characteristic drift: l(t) = l0 + t * drift
         self.drift = 0.5 * self.u - self.v
@@ -39,13 +43,16 @@ class ThreeBodyG:
 
     def phi(self, t: np.ndarray) -> np.ndarray:
         """Angle of the 1-2 rotation at backward-time *t*."""
-        _t = np.atleast_1d(t)
+        _t = np.asarray(t, dtype=float)
         result = (
             np.pi
             + np.arctan2(self.u[1], self.u[0])
             + self.plane * np.arccos(np.tanh(self.u_norm * _t))
         )
-        return np.squeeze((result + np.pi) % (2 * np.pi) - np.pi)
+        wrapped = (result + np.pi) % (2 * np.pi) - np.pi
+        if np.ndim(t) == 0:
+            return float(wrapped)
+        return wrapped
 
     def absolute_position(self, t: np.ndarray, l0: np.ndarray) -> np.ndarray:
         """Position of particle 3 relative to the 1-2 centre along the
@@ -145,7 +152,30 @@ class ThreeBodyG:
         """Given a grid of initial positions l0 and offset initial times t0,
         propagate g along characteristics and return the grid of g values."""
 
+        t0 = np.atleast_1d(t0).astype(int)
+
+        # Create solvers to compute the values of jumps
+        solver_13_plus = ThreeBodyG(self.v, self.u, plane=1, name="solver_13_plus")
+        solver_13_minus = ThreeBodyG(self.v, self.u, plane=-1, name="solver_13_minus")
+        solver_23_plus = ThreeBodyG(
+            -self.u, self.v - self.u, plane=1, name="solver_23_plus"
+        )
+        solver_23_minus = ThreeBodyG(
+            -self.u, self.v - self.u, plane=-1, name="solver_23_minus"
+        )
+
+        # Values of phi at the initial times, used for jump conditions at shadow transitions
+        phi_13_plus = solver_13_plus.phi(0.0)
+        phi_13_minus = solver_13_minus.phi(0.0)
+        phi_23_plus = solver_23_plus.phi(0.0)
+        phi_23_minus = solver_23_minus.phi(0.0)
+
         trivial = self.trivial_mask(l0)
+
+        if np.all(trivial):
+            g = np.ones((len(t0), l0.shape[0]))
+            return np.atleast_1d(np.squeeze(g))
+
         need_trace = ~trivial
 
         # Remove points for which g=1 is trivial
@@ -196,15 +226,11 @@ class ThreeBodyG:
         particle_idx = np.arange(n_cand)
 
         for i in range(n_prop - 2, -1, -1):
+            if self.name == "main":
+                print(f"Time step {i}/{n_prop-1}")
             active = i < ic_idx
             if not np.any(active):
                 continue
-
-            # TODO replace with real boundary corrections
-            delta_g_v_plus = 1.0
-            delta_g_v_minus = 1.0
-            delta_g_vu_plus = 1.0
-            delta_g_vu_minus = 1.0
 
             # Detect shadow ↔ light transitions per tube & side
             changed_v = (in_shadow_v[i] != in_shadow_v[i + 1]) & active
@@ -215,12 +241,101 @@ class ThreeBodyG:
             tr_vu_minus = changed_vu & (sr_cross[i] < 0)
             transition = tr_v_plus | tr_v_minus | tr_vu_plus | tr_vu_minus
 
+            # When crossing, jump is set by the value of outgoing contact distribution
+            # Compute the jump value by finding the corresponding point on the 1-3 or 2-3 hyperplane
+            # and propagate from these points
+            # TODO replace with real boundary corrections
+            # delta_g_v_plus = solver_13_plus._propagate_grid()
+            delta_g_v_plus = np.nan
+            delta_g_v_minus = np.nan
+            delta_g_vu_plus = np.nan
+            delta_g_vu_minus = np.nan
+
+            if np.any(tr_v_plus):
+                phi_tr_v_plus = characteristics[i + 1, tr_v_plus, 0]
+                s_tr_v_plus = s[i + 1, tr_v_plus]
+                r_tr_v_plus = (
+                    0.5
+                    * np.stack([np.cos(phi_tr_v_plus), np.sin(phi_tr_v_plus)], axis=-1)
+                    - (np.dot(s_tr_v_plus, self.v) / self.v_norm**2)[:, None]
+                    * self.u[None, :]
+                )
+                l_tr_v_plus = r_tr_v_plus - 0.5 * np.array(
+                    [[np.cos(phi_13_plus), np.sin(phi_13_plus)]]
+                )
+                print(f"Calling solver {solver_13_plus.name}")
+                delta_g_v_plus = solver_13_plus._propagate_grid(0, l_tr_v_plus)
+            if np.any(tr_v_minus):
+                phi_tr_v_minus = characteristics[i + 1, tr_v_minus, 0]
+                s_tr_v_minus = s[i + 1, tr_v_minus]
+
+                r_tr_v_minus = (
+                    0.5
+                    * np.stack(
+                        [np.cos(phi_tr_v_minus), np.sin(phi_tr_v_minus)], axis=-1
+                    )
+                    - (np.dot(s_tr_v_minus, self.v) / self.v_norm**2)[:, None]
+                    * self.u[None, :]
+                )
+                l_tr_v_minus = r_tr_v_minus + 0.5 * np.stack(
+                    [np.cos(phi_13_minus), np.sin(phi_13_minus)], axis=-1
+                )
+                print(f"Calling solver {solver_13_minus.name}")
+                delta_g_v_minus = solver_13_minus._propagate_grid(0, l_tr_v_minus)
+            if np.any(tr_vu_plus):
+                phi_tr_vu_plus = characteristics[i + 1, tr_vu_plus, 0]
+                sr_tr_vu_plus = sr[i + 1, tr_vu_plus]
+                r_tr_vu_plus = (
+                    0.5
+                    * np.stack(
+                        [np.cos(phi_tr_vu_plus), np.sin(phi_tr_vu_plus)], axis=-1
+                    )
+                    + (np.dot(sr_tr_vu_plus, self.vu) / self.vu_norm**2)[:, None]
+                    * self.u[None, :]
+                )
+                l_tr_vu_plus = r_tr_vu_plus + 0.5 * np.stack(
+                    [np.cos(phi_23_plus), np.sin(phi_23_plus)], axis=-1
+                )
+                print(f"Calling solver {solver_23_plus.name}")
+                delta_g_vu_plus = solver_23_plus._propagate_grid(0, l_tr_vu_plus)
+            if np.any(tr_vu_minus):
+                phi_tr_vu_minus = characteristics[i + 1, tr_vu_minus, 0]
+                sr_tr_vu_minus = sr[i + 1, tr_vu_minus]
+                r_tr_vu_minus = (
+                    0.5
+                    * np.stack(
+                        [np.cos(phi_tr_vu_minus), np.sin(phi_tr_vu_minus)], axis=-1
+                    )
+                    + (np.dot(sr_tr_vu_minus, self.vu) / self.vu_norm**2)[:, None]
+                    * self.u[None, :]
+                )
+                l_tr_vu_minus = r_tr_vu_minus + 0.5 * np.stack(
+                    [np.cos(phi_23_minus), np.sin(phi_23_minus)], axis=-1
+                )
+                print(f"Calling solver {solver_23_minus.name}")
+                delta_g_vu_minus = solver_23_minus._propagate_grid(0, l_tr_vu_minus)
+
+            # if np.any(np.isnan(delta_g_v_plus))
+
             # Update boundary value with jump correction
             g_prev = g_cand[i + 1]
-            g_boundary = np.where(tr_v_plus, g_prev + delta_g_v_plus, g_boundary)
-            g_boundary = np.where(tr_v_minus, g_prev + delta_g_v_minus, g_boundary)
-            g_boundary = np.where(tr_vu_plus, g_prev + delta_g_vu_plus, g_boundary)
-            g_boundary = np.where(tr_vu_minus, g_prev + delta_g_vu_minus, g_boundary)
+
+            def apply_jump(mask, delta_g, label):
+                if not np.any(mask):
+                    return
+                delta_arr = np.atleast_1d(np.squeeze(delta_g)).reshape(-1)
+                n_mask = int(np.count_nonzero(mask))
+                if delta_arr.size != n_mask:
+                    raise ValueError(
+                        f"{label}: jump size {delta_arr.size} does not match "
+                        f"transition count {n_mask}."
+                    )
+                g_boundary[mask] = g_prev[mask] + delta_arr
+
+            apply_jump(tr_v_plus, delta_g_v_plus, "tr_v_plus")
+            apply_jump(tr_v_minus, delta_g_v_minus, "tr_v_minus")
+            apply_jump(tr_vu_plus, delta_g_vu_plus, "tr_vu_plus")
+            apply_jump(tr_vu_minus, delta_g_vu_minus, "tr_vu_minus")
             t_bnd_idx = np.where(transition, i + 1, t_bnd_idx)
 
             # Evaluate local solutions
@@ -229,13 +344,13 @@ class ThreeBodyG:
             g_cand[i] = np.where(active, np.where(in_shadow[i], g_s, g_l), g_cand[i])
 
         inside = (np.linalg.norm(s, axis=-1) < 1) | (np.linalg.norm(sr, axis=-1) < 1)
-        g_cand[inside] = np.nan
+        g_cand[inside] = np.nan if self.name == "main" else 0.0
 
         g = np.full((len(t0), l0.shape[0]), np.nan)
         g[:, trivial] = 1.0
         g[:, need_trace] = g_cand[0, :].reshape((len(t0), l0_initial.shape[0]))
 
-        return g
+        return np.atleast_1d(np.squeeze(g))
 
     def visualize_3d(
         self,
@@ -368,9 +483,10 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     u = np.array([np.cos(-np.pi), np.sin(-np.pi)])
-    v = np.array([np.cos(np.pi / 2), np.sin(np.pi / 2)])
+    v = np.array([np.cos(np.pi / 3), np.sin(np.pi / 3)])
     solver = ThreeBodyG(u, v, plane=1)
-    _coord = np.linspace(-1.5, 6, 100)
+    npoints = 50
+    _coord = np.linspace(-1.5, 6, npoints)
     l0 = np.stack(
         np.meshgrid(_coord, _coord, indexing="ij"),
         axis=-1,
@@ -381,8 +497,8 @@ if __name__ == "__main__":
 
     fig = plt.figure(figsize=(10, 6))
     for i in range(6):
-        ax, grid = plt.subplot(2, 3, i + 1), g[i].reshape((100, 100))
-        ax.imshow(grid.T, origin="lower", extent=(-3, 3, -3, 3), vmin=0, vmax=2)
+        ax, grid = plt.subplot(2, 3, i + 1), g[i].reshape((npoints, npoints))
+        ax.imshow(grid.T, origin="lower", extent=(-3, 6, -3, 6), vmin=0, vmax=2)
         ax.plot([0, v[0]], [0, v[1]], "r-", label="v")
         ax.plot([0, v[0] - u[0]], [0, v[1] - u[1]], "g-", label="v-u")
         ax.plot([0, v[0] - u[0] / 2], [0, v[1] - u[1] / 2], "y-", label="v-u/2")
