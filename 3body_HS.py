@@ -144,6 +144,42 @@ class ThreeBodyG:
         """Analytic solution in a shadow region."""
         return g_boundary * np.cosh(self.u_norm * t) / np.cosh(self.u_norm * t_bound)
 
+    def _phi_speed(self, t: np.ndarray) -> np.ndarray:
+        """Absolute angular speed |dphi/dt| along characteristics."""
+        _t = np.asarray(t, dtype=float)
+        return self.u_norm / np.cosh(self.u_norm * np.abs(_t))
+
+    def _adaptive_time_grid(
+        self, t0_candidates: np.ndarray, t_prop_max: float, n_target: int
+    ) -> np.ndarray:
+        """Build a non-uniform propagation grid to limit angular overshoot."""
+        if t_prop_max <= 0:
+            return np.array([0.0])
+
+        n_target = max(int(n_target), 2)
+        # Total phi variation is bounded by pi/2, so this gives a target dphi/step.
+        dphi_target = (np.pi / 2) / (n_target - 1)
+        dt_floor = t_prop_max / (200 * n_target)
+        max_steps = 10 * n_target
+
+        t_prop = [0.0]
+        while t_prop[-1] < t_prop_max and len(t_prop) < max_steps:
+            tau = t_prop[-1]
+            max_rate = float(np.max(self._phi_speed(t0_candidates + tau)))
+            if max_rate <= 1e-14:
+                dt = t_prop_max - tau
+            else:
+                dt = dphi_target / max_rate
+
+            dt = min(max(dt, dt_floor), t_prop_max - tau)
+            t_prop.append(tau + dt)
+
+        if t_prop[-1] < t_prop_max:
+            tail = np.linspace(t_prop[-1], t_prop_max, n_target)
+            t_prop.extend(tail[1:].tolist())
+
+        return np.asarray(t_prop, dtype=float)
+
     # -- Core propagation ---------------------------------------------------
 
     def _propagate_grid(
@@ -152,7 +188,7 @@ class ThreeBodyG:
         """Given a grid of initial positions l0 and offset initial times t0,
         propagate g along characteristics and return the grid of g values."""
 
-        t0 = np.atleast_1d(t0).astype(int)
+        t0 = np.atleast_1d(t0).astype(float)
 
         # Create solvers to compute the values of jumps
         solver_13_plus = ThreeBodyG(self.v, self.u, plane=1, name="solver_13_plus")
@@ -190,9 +226,10 @@ class ThreeBodyG:
         drift_speed = max(np.linalg.norm(self.drift), 1e-10)
         per_point_t = 1.5 * np.linalg.norm(l0_initial, axis=-1) / drift_speed
         t_prop_max = np.max(per_point_t)
-        t_prop = np.linspace(0, t_prop_max, n_prop)
+        t_prop = self._adaptive_time_grid(grid[:, 0], t_prop_max, n_prop)
+        n_steps = len(t_prop)
 
-        characteristics = np.zeros((len(t_prop), *grid.shape))
+        characteristics = np.zeros((n_steps, *grid.shape))
 
         t = t_prop[:, None] + grid[:, 0][None, :]
 
@@ -210,7 +247,7 @@ class ThreeBodyG:
         # Initial conditions
         n_cand = grid.shape[0]
         has_coll = ~np.isnan(coll_time)
-        ic_idx = np.where(has_coll, coll_time, n_prop - 1).astype(int)
+        ic_idx = np.where(has_coll, coll_time, n_steps - 1).astype(int)
         ic_val = np.where(has_coll, 0.0, 1.0)
 
         # Shadow masks & signed distances
@@ -218,16 +255,16 @@ class ThreeBodyG:
         in_shadow = in_shadow_v | in_shadow_vu
 
         # Propagate from IC toward t = 0
-        g_cand = np.ones((n_prop, n_cand))
+        g_cand = np.ones((n_steps, n_cand))
         g_cand[ic_idx, np.arange(n_cand)] = ic_val
 
         g_boundary = ic_val.copy()
         t_bnd_idx = ic_idx.copy()
         particle_idx = np.arange(n_cand)
 
-        for i in range(n_prop - 2, -1, -1):
+        for i in range(n_steps - 2, -1, -1):
             if self.name == "main":
-                print(f"Time step {i}/{n_prop-1}")
+                print(f"Time step {i}/{n_steps-1}")
             active = i < ic_idx
             if not np.any(active):
                 continue
@@ -491,7 +528,7 @@ if __name__ == "__main__":
         np.meshgrid(_coord, _coord, indexing="ij"),
         axis=-1,
     ).reshape(-1, 2)
-    phi_grid = np.linspace(0, np.pi / 2, 10)
+    phi_grid = np.linspace(0.1, np.pi / 2, 10)
     t0 = solver.t_from_phi(phi_grid)
     g = solver._propagate_grid(t0, l0)
 
@@ -499,9 +536,10 @@ if __name__ == "__main__":
     for i in range(6):
         ax, grid = plt.subplot(2, 3, i + 1), g[i].reshape((npoints, npoints))
         ax.imshow(grid.T, origin="lower", extent=(-3, 6, -3, 6), vmin=0, vmax=2)
-        ax.plot([0, v[0]], [0, v[1]], "r-", label="v")
-        ax.plot([0, v[0] - u[0]], [0, v[1] - u[1]], "g-", label="v-u")
-        ax.plot([0, v[0] - u[0] / 2], [0, v[1] - u[1] / 2], "y-", label="v-u/2")
+        # ax.plot([0, v[0]], [0, v[1]], "r-", label="v")
+        # ax.plot([0, v[0] - u[0]], [0, v[1] - u[1]], "g-", label="v-u")
+        # ax.plot([0, v[0] - u[0] / 2], [0, v[1] - u[1] / 2], "y-", label="v-u/2")
+        ax.plot([0, np.cos(phi_grid[i])], [0, np.sin(phi_grid[i])], "k-", label="φ")
 
     # phi_grid, lx, ly, g_grid = solver.compute_g_on_grid(
     #     l_bounds=(-5, 5), n_l=80, n_times=20
