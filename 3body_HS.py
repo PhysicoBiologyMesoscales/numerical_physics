@@ -29,6 +29,8 @@ class ThreeBodyG:
         self.u_hat = self.u / self.u_norm
         self.v_hat = self.v / self.v_norm
         self.vu_hat = self.vu / self.vu_norm
+        self.u_cross_v = np.cross(self.u, self.v)
+        self.u_dot_v = np.dot(self.u, self.v)
 
         # Characteristic drift: l(t) = l0 + t * drift
         self.drift = 0.5 * self.u - self.v
@@ -301,7 +303,17 @@ class ThreeBodyG:
                     [[np.cos(phi_13_plus), np.sin(phi_13_plus)]]
                 )
                 print(f"Calling solver {solver_13_plus.name}")
-                delta_g_v_plus = solver_13_plus._propagate_grid(0, l_tr_v_plus)
+                vel = 0.5 * (
+                    self.u_cross_v
+                    * (1 - 1 / np.cosh(self.u_norm * t[i + 1, tr_v_plus]) ** 2)
+                    - self.plane
+                    * self.u_dot_v
+                    * np.sinh(self.u_norm * t[i + 1, tr_v_plus])
+                    / np.cosh(self.u_norm * t[i + 1, tr_v_plus]) ** 2
+                )
+                delta_g_v_plus = solver_13_plus._propagate_grid(
+                    0, l_tr_v_plus
+                ) / np.abs(vel)
             if np.any(tr_v_minus):
                 phi_tr_v_minus = characteristics[i + 1, tr_v_minus, 0]
                 s_tr_v_minus = s[i + 1, tr_v_minus]
@@ -317,8 +329,20 @@ class ThreeBodyG:
                 l_tr_v_minus = r_tr_v_minus + 0.5 * np.stack(
                     [np.cos(phi_13_minus), np.sin(phi_13_minus)], axis=-1
                 )
+
                 print(f"Calling solver {solver_13_minus.name}")
-                delta_g_v_minus = solver_13_minus._propagate_grid(0, l_tr_v_minus)
+
+                vel = 0.5 * (
+                    self.u_cross_v
+                    * (1 - 1 / np.cosh(self.u_norm * t[i + 1, tr_v_minus]) ** 2)
+                    - self.plane
+                    * self.u_dot_v
+                    * np.sinh(self.u_norm * t[i + 1, tr_v_minus])
+                    / np.cosh(self.u_norm * t[i + 1, tr_v_minus]) ** 2
+                )
+                delta_g_v_minus = solver_13_minus._propagate_grid(
+                    0, l_tr_v_minus
+                ) / np.abs(vel)
             if np.any(tr_vu_plus):
                 phi_tr_vu_plus = characteristics[i + 1, tr_vu_plus, 0]
                 sr_tr_vu_plus = sr[i + 1, tr_vu_plus]
@@ -334,7 +358,18 @@ class ThreeBodyG:
                     [np.cos(phi_23_plus), np.sin(phi_23_plus)], axis=-1
                 )
                 print(f"Calling solver {solver_23_plus.name}")
-                delta_g_vu_plus = solver_23_plus._propagate_grid(0, l_tr_vu_plus)
+
+                vel = 0.5 * (
+                    self.u_cross_v
+                    * (1 - 1 / np.cosh(self.u_norm * t[i + 1, tr_vu_plus]) ** 2)
+                    + self.plane
+                    * (self.u_dot_v - self.u_norm**2)
+                    * np.sinh(self.u_norm * t[i + 1, tr_vu_plus])
+                    / np.cosh(self.u_norm * t[i + 1, tr_vu_plus]) ** 2
+                )
+                delta_g_vu_plus = solver_23_plus._propagate_grid(
+                    0, l_tr_vu_plus
+                ) / np.abs(vel)
             if np.any(tr_vu_minus):
                 phi_tr_vu_minus = characteristics[i + 1, tr_vu_minus, 0]
                 sr_tr_vu_minus = sr[i + 1, tr_vu_minus]
@@ -350,9 +385,17 @@ class ThreeBodyG:
                     [np.cos(phi_23_minus), np.sin(phi_23_minus)], axis=-1
                 )
                 print(f"Calling solver {solver_23_minus.name}")
-                delta_g_vu_minus = solver_23_minus._propagate_grid(0, l_tr_vu_minus)
-
-            # if np.any(np.isnan(delta_g_v_plus))
+                vel = 0.5 * (
+                    self.u_cross_v
+                    * (1 - 1 / np.cosh(self.u_norm * t[i + 1, tr_vu_minus]) ** 2)
+                    + self.plane
+                    * (self.u_dot_v - self.u_norm**2)
+                    * np.sinh(self.u_norm * t[i + 1, tr_vu_minus])
+                    / np.cosh(self.u_norm * t[i + 1, tr_vu_minus]) ** 2
+                )
+                delta_g_vu_minus = solver_23_minus._propagate_grid(
+                    0, l_tr_vu_minus
+                ) / np.abs(vel)
 
             # Update boundary value with jump correction
             g_prev = g_cand[i + 1]
