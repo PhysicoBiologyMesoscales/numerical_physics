@@ -68,7 +68,7 @@ class ThreeBodyG:
         Returns (s, sr) each with same shape as *l*."""
         # _phi = phi[:, None] if l.ndim == 3 else phi
         half_rot = 0.5 * np.stack([np.cos(phi), np.sin(phi)], axis=-1)
-        return l - half_rot, l + half_rot
+        return l + half_rot, l - half_rot
 
     def t_from_phi(self, phi_target: np.ndarray) -> np.ndarray:
         """Invert phi(t) to recover t from target phi values."""
@@ -129,7 +129,8 @@ class ThreeBodyG:
         """Earliest collision-time index with particle 1 or 2."""
         s_mag = np.linalg.norm(s, axis=-1) - 1
         sr_mag = np.linalg.norm(sr, axis=-1) - 1
-        return np.minimum(
+        # Use NaN-aware minimum: if either channel collides, keep that index.
+        return np.fmin(
             self._first_crossing_idx(s_mag),
             self._first_crossing_idx(sr_mag),
         )
@@ -283,7 +284,6 @@ class ThreeBodyG:
             # When crossing, jump is set by the value of outgoing contact distribution
             # Compute the jump value by finding the corresponding point on the 1-3 or 2-3 hyperplane
             # and propagate from these points
-            # TODO replace with real boundary corrections
             # delta_g_v_plus = solver_13_plus._propagate_grid()
             delta_g_v_plus = np.nan
             delta_g_v_minus = np.nan
@@ -563,7 +563,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     u = np.array([np.cos(-np.pi), np.sin(-np.pi)])
-    v = np.array([np.cos(np.pi / 3), np.sin(np.pi / 3)])
+    v = np.array([np.cos(np.pi / 2), np.sin(np.pi / 2)])
     solver = ThreeBodyG(u, v, plane=1)
     npoints = 50
     _coord = np.linspace(-1.5, 6, npoints)
@@ -571,7 +571,7 @@ if __name__ == "__main__":
         np.meshgrid(_coord, _coord, indexing="ij"),
         axis=-1,
     ).reshape(-1, 2)
-    phi_grid = np.linspace(0.1, np.pi / 2, 10)
+    phi_grid = np.linspace(0.1, np.pi / 2, 6)
     t0 = solver.t_from_phi(phi_grid)
     g = solver._propagate_grid(t0, l0)
 
