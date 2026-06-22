@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator
 
 
 class ThreeBodyG:
@@ -68,7 +67,7 @@ class ThreeBodyG:
         Returns (s, sr) each with same shape as *l*."""
         # _phi = phi[:, None] if l.ndim == 3 else phi
         half_rot = 0.5 * np.stack([np.cos(phi), np.sin(phi)], axis=-1)
-        return l - half_rot, l + half_rot
+        return l + half_rot, l - half_rot
 
     def t_from_phi(self, phi_target: np.ndarray) -> np.ndarray:
         """Invert phi(t) to recover t from target phi values."""
@@ -129,7 +128,8 @@ class ThreeBodyG:
         """Earliest collision-time index with particle 1 or 2."""
         s_mag = np.linalg.norm(s, axis=-1) - 1
         sr_mag = np.linalg.norm(sr, axis=-1) - 1
-        return np.minimum(
+        # Use NaN-aware minimum: if either channel collides, keep that index.
+        return np.fmin(
             self._first_crossing_idx(s_mag),
             self._first_crossing_idx(sr_mag),
         )
@@ -280,10 +280,46 @@ class ThreeBodyG:
             tr_vu_minus = changed_vu & (sr_cross[i] < 0)
             transition = tr_v_plus | tr_v_minus | tr_vu_plus | tr_vu_minus
 
+            # Remove transitions where bulk characteristics have already collided with another particles
+            # Check particle 2 collisions for v-tube transitions
+            is_in_shadow_vu = (tr_v_minus) & (in_shadow_vu[i + 1])
+            if np.any(is_in_shadow_vu):
+                t_coll_2 = np.nan_to_num(coll_time[is_in_shadow_vu], 0).astype(int)
+                dt_coll = t[t_coll_2, is_in_shadow_vu] - t[i + 1, is_in_shadow_vu]
+                dt_from_1 = np.dot(s[i + 1, is_in_shadow_vu], self.v) / self.v_norm
+                collided_before = dt_coll < dt_from_1
+                tr_v_minus[is_in_shadow_vu] &= ~collided_before
+
+            # Check particle 1 collisions for v-tube transitions
+            is_in_shadow_vu = (tr_v_plus) & (in_shadow_vu[i + 1])
+            if np.any(is_in_shadow_vu):
+                t_coll_1 = np.nan_to_num(coll_time[is_in_shadow_vu], 0).astype(int)
+                dt_coll = t[t_coll_1, is_in_shadow_vu] - t[i + 1, is_in_shadow_vu]
+                dt_from_1 = np.dot(s[i + 1, is_in_shadow_vu], self.v) / self.v_norm
+                collided_before = dt_coll < dt_from_1
+                tr_v_plus[is_in_shadow_vu] &= ~collided_before
+
+            # Check particle 1 collisions for vu-tube transitions
+            is_in_shadow_v = (tr_vu_plus) & (in_shadow_v[i + 1])
+            if np.any(is_in_shadow_v):
+                t_coll_1 = np.nan_to_num(coll_time[is_in_shadow_v], 0).astype(int)
+                dt_coll = t[t_coll_1, is_in_shadow_v] - t[i + 1, is_in_shadow_v]
+                dt_from_2 = np.dot(sr[i + 1, is_in_shadow_v], self.vu) / self.vu_norm
+                collided_before = dt_coll < dt_from_2
+                tr_vu_plus[is_in_shadow_v] &= ~collided_before
+
+            # Check particle 2 collisions for vu-tube transitions
+            is_in_shadow_v = (tr_vu_minus) & (in_shadow_v[i + 1])
+            if np.any(is_in_shadow_v):
+                t_coll_2 = np.nan_to_num(coll_time[is_in_shadow_v], 0).astype(int)
+                dt_coll = t[t_coll_2, is_in_shadow_v] - t[i + 1, is_in_shadow_v]
+                dt_from_2 = np.dot(sr[i + 1, is_in_shadow_v], self.vu) / self.vu_norm
+                collided_before = dt_coll < dt_from_2
+                tr_vu_minus[is_in_shadow_v] &= ~collided_before
+
             # When crossing, jump is set by the value of outgoing contact distribution
             # Compute the jump value by finding the corresponding point on the 1-3 or 2-3 hyperplane
             # and propagate from these points
-            # TODO replace with real boundary corrections
             # delta_g_v_plus = solver_13_plus._propagate_grid()
             delta_g_v_plus = np.nan
             delta_g_v_minus = np.nan
@@ -571,7 +607,7 @@ if __name__ == "__main__":
         np.meshgrid(_coord, _coord, indexing="ij"),
         axis=-1,
     ).reshape(-1, 2)
-    phi_grid = np.linspace(0.1, np.pi / 2, 10)
+    phi_grid = np.linspace(0.1, np.pi / 2, 6)
     t0 = solver.t_from_phi(phi_grid)
     g = solver._propagate_grid(t0, l0)
 
