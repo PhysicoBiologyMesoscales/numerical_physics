@@ -75,14 +75,11 @@ def convert_to_r(g0, g1, k_arr, r_arr):
 
 
 def compute_P(lp, phi, eps, r_arr, dV, g0, g1):
-    P = (
-        phi
-        / np.pi
-        * (
-            lp / 2
-            - phi / 2 / eps * np.trapz(r_arr**2 * dV(r_arr) * (1 + g0), r_arr)
-            + phi / eps * lp * np.trapz(r_arr * dV(r_arr) * g1, r_arr)
-        )
+    rho0 = 4 * phi / np.pi  # phi = pi rho0 (a/2)^2, a = 1 the diameter
+    P = rho0 * (
+        lp / 2
+        - np.pi * rho0 / 2 / eps * np.trapz(r_arr**2 * dV(r_arr) * (1 + g0), r_arr)
+        + np.pi * rho0 / eps * lp * np.trapz(r_arr * dV(r_arr) * g1, r_arr)
     )
     return P
 

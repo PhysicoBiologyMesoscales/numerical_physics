@@ -14,7 +14,7 @@ def L(k, lp, phi, eps, V):
     L = np.diag((np.arange(N) - s) ** 2) / lp - 1j * 1 / 2 * (
         np.conjugate(k) * np.eye(N, k=1) + k * np.eye(N, k=-1)
     )
-    L[s, s] += phi / np.pi / eps * V(k) * k**2
+    L[s, s] += 4 * phi / np.pi / eps * V(k) * k**2  # rho0 = 4 phi/pi (a = diameter)
     return L
 
 

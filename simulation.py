@@ -43,17 +43,6 @@ def parse_args():
     return args
 
 
-def hexagonal_tiling(phi, l, L):
-    phi_star = np.pi / 2 / np.sqrt(3)  # Optimal packing fraction
-    D = np.sqrt(phi_star / phi) * 2
-    Nx = int(l / D)
-    Ny = int(L / (np.sqrt(3) * D / 2))
-    x = np.repeat(np.arange(Nx) * D, Ny)
-    x[::2] = (x[::2] + D / 2) % l
-    y = np.tile(np.arange(Ny) * np.sqrt(3) * D / 2, Nx)
-    return np.stack([x, y], axis=-1)
-
-
 class Simulation:
     def __init__(
         self,
@@ -155,8 +144,9 @@ class Simulation:
 
     def compute_forces(self, pairs, rij, dij):
         F = np.zeros(self.N, dtype=np.complex128)
-        np.add.at(F, pairs[:, 0], -self.kc * rij * np.exp(-0.5 * dij**2))
-        np.add.at(F, pairs[:, 1], self.kc * rij * np.exp(-0.5 * dij**2))
+        grad_V = self.kc * rij * np.exp(-0.5 * dij**2)
+        np.add.at(F, pairs[:, 0], -grad_V)
+        np.add.at(F, pairs[:, 1], grad_V)
         return F
 
     def sim_step(self, r, theta, F):
@@ -203,7 +193,7 @@ class Simulation:
         r, theta, tree, tree_ref = self.initial_fields()
         with h5py.File(join(self.save_path, "data.h5py"), "a") as hdf_file:
             if not self.no_pcf:
-                pcf = PCFComputation(2.0, 1.0, 20, 30, 30, hdf_file=hdf_file)
+                pcf = PCFComputation(10.0, 1.0, 201, 100, 100, hdf_file=hdf_file)
                 pcf.compute_bins()
                 pcf.set_hdf_group()
                 # Temp arrays to store pcf statistics at each time step

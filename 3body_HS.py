@@ -7,19 +7,25 @@ class ThreeBodyG:
 
     Usage
     -----
-    >>> solver = ThreeBodyG(u, v)
+    >>> solver = ThreeBodyG(u, v, verbose=True)
     >>> t, g, l0 = solver.compute_g(l0, n_times=100)
     >>> phi, lx, ly, g_grid = solver.compute_g_on_grid()
     """
 
     def __init__(
-        self, u: np.ndarray, v: np.ndarray, plane: int = 1, name: str = "main"
+        self,
+        u: np.ndarray,
+        v: np.ndarray,
+        plane: int = 1,
+        name: str = "main",
+        verbose: bool = False,
     ):
         self.u = np.asarray(u, dtype=float)
         self.v = np.asarray(v, dtype=float)
         self.vu = self.v - self.u
         self.plane = plane
         self.name = name
+        self.verbose = bool(verbose)
 
         # Derived geometry
         self.u_norm = np.linalg.norm(self.u)
@@ -193,13 +199,33 @@ class ThreeBodyG:
         t0 = np.atleast_1d(t0).astype(float)
 
         # Create solvers to compute the values of jumps
-        solver_13_plus = ThreeBodyG(self.v, self.u, plane=1, name="solver_13_plus")
-        solver_13_minus = ThreeBodyG(self.v, self.u, plane=-1, name="solver_13_minus")
+        solver_13_plus = ThreeBodyG(
+            self.v,
+            self.u,
+            plane=1,
+            name="solver_13_plus",
+            verbose=self.verbose,
+        )
+        solver_13_minus = ThreeBodyG(
+            self.v,
+            self.u,
+            plane=-1,
+            name="solver_13_minus",
+            verbose=self.verbose,
+        )
         solver_23_plus = ThreeBodyG(
-            -self.u, self.v - self.u, plane=1, name="solver_23_plus"
+            -self.u,
+            self.v - self.u,
+            plane=1,
+            name="solver_23_plus",
+            verbose=self.verbose,
         )
         solver_23_minus = ThreeBodyG(
-            -self.u, self.v - self.u, plane=-1, name="solver_23_minus"
+            -self.u,
+            self.v - self.u,
+            plane=-1,
+            name="solver_23_minus",
+            verbose=self.verbose,
         )
 
         # Values of phi at the initial times, used for jump conditions at shadow transitions
@@ -265,7 +291,7 @@ class ThreeBodyG:
         particle_idx = np.arange(n_cand)
 
         for i in range(n_steps - 2, -1, -1):
-            if self.name == "main":
+            if self.verbose and self.name == "main":
                 print(f"Time step {i}/{n_steps-1}")
             active = i < ic_idx
             if not np.any(active):
@@ -280,42 +306,74 @@ class ThreeBodyG:
             tr_vu_minus = changed_vu & (sr_cross[i] < 0)
             transition = tr_v_plus | tr_v_minus | tr_vu_plus | tr_vu_minus
 
+            def remove_collided_transitions(
+                transition, mask, tube_name, pos, v12, v12_norm, v13, v13_norm
+            ):
+                if not np.any(mask):
+                    return
+                dt_from_coll = (
+                    np.dot(pos[i + 1, mask], v12) / v12_norm
+                    - np.sqrt(1 - np.cross(pos[i + 1, mask], v12 / v12_norm) ** 2)
+                ) / v12_norm
+                dt_from_1 = np.dot(pos[i + 1, mask], v13) / v13_norm
+                collided_before = dt_from_coll < dt_from_1
+                if np.any(collided_before):
+                    if self.verbose:
+                        print(
+                            f"Removing {np.sum(collided_before)} transitions from {tube_name} "
+                            f"due to prior collisions."
+                        )
+                    transition[mask] &= ~collided_before
+
             # Remove transitions where bulk characteristics have already collided with another particles
             # Check particle 2 collisions for v-tube transitions
-            is_in_shadow_vu = (tr_v_minus) & (in_shadow_vu[i + 1])
-            if np.any(is_in_shadow_vu):
-                t_coll_2 = np.nan_to_num(coll_time[is_in_shadow_vu], 0).astype(int)
-                dt_coll = t[t_coll_2, is_in_shadow_vu] - t[i + 1, is_in_shadow_vu]
-                dt_from_1 = np.dot(s[i + 1, is_in_shadow_vu], self.v) / self.v_norm
-                collided_before = dt_coll < dt_from_1
-                tr_v_minus[is_in_shadow_vu] &= ~collided_before
-
-            # Check particle 1 collisions for v-tube transitions
-            is_in_shadow_vu = (tr_v_plus) & (in_shadow_vu[i + 1])
-            if np.any(is_in_shadow_vu):
-                t_coll_1 = np.nan_to_num(coll_time[is_in_shadow_vu], 0).astype(int)
-                dt_coll = t[t_coll_1, is_in_shadow_vu] - t[i + 1, is_in_shadow_vu]
-                dt_from_1 = np.dot(s[i + 1, is_in_shadow_vu], self.v) / self.v_norm
-                collided_before = dt_coll < dt_from_1
-                tr_v_plus[is_in_shadow_vu] &= ~collided_before
+            mask_v_minus = (tr_v_minus) & (in_shadow_vu[i + 1])
+            remove_collided_transitions(
+                tr_v_minus,
+                mask_v_minus,
+                "v-tube (minus)",
+                s,
+                self.v,
+                self.v_norm,
+                self.vu,
+                self.vu_norm,
+            )
+            mask_v_plus = (tr_v_plus) & (in_shadow_vu[i + 1])
+            remove_collided_transitions(
+                tr_v_plus,
+                mask_v_plus,
+                "v-tube (plus)",
+                s,
+                self.v,
+                self.v_norm,
+                self.vu,
+                self.vu_norm,
+            )
 
             # Check particle 1 collisions for vu-tube transitions
-            is_in_shadow_v = (tr_vu_plus) & (in_shadow_v[i + 1])
-            if np.any(is_in_shadow_v):
-                t_coll_1 = np.nan_to_num(coll_time[is_in_shadow_v], 0).astype(int)
-                dt_coll = t[t_coll_1, is_in_shadow_v] - t[i + 1, is_in_shadow_v]
-                dt_from_2 = np.dot(sr[i + 1, is_in_shadow_v], self.vu) / self.vu_norm
-                collided_before = dt_coll < dt_from_2
-                tr_vu_plus[is_in_shadow_v] &= ~collided_before
-
+            mask_vu_plus = (tr_vu_plus) & (in_shadow_v[i + 1])
+            remove_collided_transitions(
+                tr_vu_plus,
+                mask_vu_plus,
+                "vu-tube (plus)",
+                sr,
+                self.vu,
+                self.vu_norm,
+                self.v,
+                self.v_norm,
+            )
             # Check particle 2 collisions for vu-tube transitions
-            is_in_shadow_v = (tr_vu_minus) & (in_shadow_v[i + 1])
-            if np.any(is_in_shadow_v):
-                t_coll_2 = np.nan_to_num(coll_time[is_in_shadow_v], 0).astype(int)
-                dt_coll = t[t_coll_2, is_in_shadow_v] - t[i + 1, is_in_shadow_v]
-                dt_from_2 = np.dot(sr[i + 1, is_in_shadow_v], self.vu) / self.vu_norm
-                collided_before = dt_coll < dt_from_2
-                tr_vu_minus[is_in_shadow_v] &= ~collided_before
+            mask_vu_minus = (tr_vu_minus) & (in_shadow_v[i + 1])
+            remove_collided_transitions(
+                tr_vu_minus,
+                mask_vu_minus,
+                "vu-tube (minus)",
+                sr,
+                self.vu,
+                self.vu_norm,
+                self.v,
+                self.v_norm,
+            )
 
             # When crossing, jump is set by the value of outgoing contact distribution
             # Compute the jump value by finding the corresponding point on the 1-3 or 2-3 hyperplane
@@ -338,7 +396,8 @@ class ThreeBodyG:
                 l_tr_v_plus = r_tr_v_plus - 0.5 * np.array(
                     [[np.cos(phi_13_plus), np.sin(phi_13_plus)]]
                 )
-                print(f"Calling solver {solver_13_plus.name}")
+                if self.verbose:
+                    print(f"Calling solver {solver_13_plus.name}")
                 vel = 0.5 * (
                     self.u_cross_v
                     * (1 - 1 / np.cosh(self.u_norm * t[i + 1, tr_v_plus]) ** 2)
@@ -366,7 +425,8 @@ class ThreeBodyG:
                     [np.cos(phi_13_minus), np.sin(phi_13_minus)], axis=-1
                 )
 
-                print(f"Calling solver {solver_13_minus.name}")
+                if self.verbose:
+                    print(f"Calling solver {solver_13_minus.name}")
 
                 vel = 0.5 * (
                     self.u_cross_v
@@ -393,7 +453,8 @@ class ThreeBodyG:
                 l_tr_vu_plus = r_tr_vu_plus + 0.5 * np.stack(
                     [np.cos(phi_23_plus), np.sin(phi_23_plus)], axis=-1
                 )
-                print(f"Calling solver {solver_23_plus.name}")
+                if self.verbose:
+                    print(f"Calling solver {solver_23_plus.name}")
 
                 vel = 0.5 * (
                     self.u_cross_v
@@ -420,7 +481,8 @@ class ThreeBodyG:
                 l_tr_vu_minus = r_tr_vu_minus + 0.5 * np.stack(
                     [np.cos(phi_23_minus), np.sin(phi_23_minus)], axis=-1
                 )
-                print(f"Calling solver {solver_23_minus.name}")
+                if self.verbose:
+                    print(f"Calling solver {solver_23_minus.name}")
                 vel = 0.5 * (
                     self.u_cross_v
                     * (1 - 1 / np.cosh(self.u_norm * t[i + 1, tr_vu_minus]) ** 2)
@@ -601,8 +663,8 @@ if __name__ == "__main__":
     u = np.array([np.cos(-np.pi), np.sin(-np.pi)])
     v = np.array([np.cos(np.pi / 3), np.sin(np.pi / 3)])
     solver = ThreeBodyG(u, v, plane=1)
-    npoints = 50
-    _coord = np.linspace(-1.5, 6, npoints)
+    npoints = 100
+    _coord = np.linspace(-1.5, 1.5, npoints)
     l0 = np.stack(
         np.meshgrid(_coord, _coord, indexing="ij"),
         axis=-1,
@@ -614,7 +676,7 @@ if __name__ == "__main__":
     fig = plt.figure(figsize=(10, 6))
     for i in range(6):
         ax, grid = plt.subplot(2, 3, i + 1), g[i].reshape((npoints, npoints))
-        ax.imshow(grid.T, origin="lower", extent=(-3, 6, -3, 6), vmin=0, vmax=2)
+        ax.imshow(grid.T, origin="lower", extent=(-1.5, 1.5, -1.5, 1.5), vmin=0, vmax=2)
         # ax.plot([0, v[0]], [0, v[1]], "r-", label="v")
         # ax.plot([0, v[0] - u[0]], [0, v[1] - u[1]], "g-", label="v-u")
         # ax.plot([0, v[0] - u[0] / 2], [0, v[1] - u[1] / 2], "y-", label="v-u/2")
